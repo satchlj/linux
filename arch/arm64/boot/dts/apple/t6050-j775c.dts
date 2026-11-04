@@ -4,33 +4,192 @@
  *
  * target-type: J775c
  *
- * One T6050 die (t6050-max.dtsi). Nobody has booted Linux on this board
- * yet: beyond the SoC this file only adds the board's hardware inventory
- * (t6050-peripherals.dtsi), all of it disabled, from the board's ADT.
+ * One T6050 die; board wiring from the J775c ADT and retained boot trials.
  *
  * Copyright The Asahi Linux Contributors
  */
-
 /dts-v1/;
-
 #include "t6050-max.dtsi"
-
-/ {
+#include "t6050-max-cache.dtsi"
+/  {
 	compatible = "apple,j775c", "apple,t6050", "apple,arm-platform";
 	model = "Apple Mac Studio (M5 Max, 2026)";
 	chassis-type = "desktop";
-
-	chosen {
+	aliases  {
+		serial0 = &dockchannel;
+		ethernet0 = &ethernet0;
+		wifi0 = &n1_alpha;
+		bluetooth0 = &n1_beta;
+		nvram = &nvram;
+	};
+	chosen  {
 		#address-cells = <2>;
 		#size-cells = <2>;
 		ranges;
 	};
 };
-
-/* PCIe port 0 is not described for this board yet */
-&pcie0 {
-	status = "disabled";
+&pcie0  {
+	reg = <0x1c 0xb0000000 0x0 0x10000000>,
+		<0x4 0x14000000 0x0 0x4000>,
+		<0x4 0x12028000 0x0 0x8000>,
+		<0x4 0x17018000 0x0 0x4000>,
+		<0x4 0x12024000 0x0 0x4000>,
+		<0x4 0x13028000 0x0 0x8000>,
+		<0x4 0x1701c000 0x0 0x4000>,
+		<0x4 0x13024000 0x0 0x4000>,
+		<0x4 0x10028000 0x0 0x8000>,
+		<0x4 0x17010000 0x0 0x4000>,
+		<0x4 0x10024000 0x0 0x4000>;
+	reg-names = "config", "rc", "port2", "phy2", "intr2axi2",
+		"port3", "phy3", "intr2axi3",
+		"port0", "phy0", "intr2axi0";
+	interrupts = <AIC_IRQ 0 1539 IRQ_TYPE_LEVEL_HIGH>,
+		<AIC_IRQ 0 1547 IRQ_TYPE_LEVEL_HIGH>,
+		<AIC_IRQ 0 1523 IRQ_TYPE_LEVEL_HIGH>;
+	interrupt-names = "port2", "port3", "port0";
+	/*
+	 * The boot loader numbers port 2's secondary bus 1 and port 3's 2;
+	 * port 0's is 3 until a boot loader that trains it renumbers all three
+	 * in the PCI core's order. The N1's three functions are on DART
+	 * streams 1-3.
+	 */
+	iommu-map = <0x100 &dart_apcie2 1 1>,
+		<0x200 &dart_apcie3 1 1>,
+		<0x300 &dart_apcie0 1 3>;
+	bus-range = <0 3>;
+	port02: pci@2,0  {
+		device_type = "pci";
+		reg = <0x1000 0 0 0 0>;
+		bus-range = <1 1>;
+		apple,link-trained-by-bootloader;
+		#address-cells = <3>;
+		#size-cells = <2>;
+		ranges;
+		interrupt-controller;
+		#interrupt-cells = <1>;
+		interrupt-map-mask = <0 0 0 7>;
+		interrupt-map = <0 0 0 1 &port02 0 0 0 0>,
+			<0 0 0 2 &port02 0 0 0 1>,
+			<0 0 0 3 &port02 0 0 0 2>,
+			<0 0 0 4 &port02 0 0 0 3>;
+		/* The RTL8127A keeps no MAC address of its own */
+		ethernet0: ethernet@0,0  {
+			reg = <0x10000 0x0 0x0 0x0 0x0>;
+			/* To be filled by the loader */
+			local-mac-address = [00 00 00 00 00 00];
+		};
+	};
+	port03: pci@3,0  {
+		device_type = "pci";
+		reg = <0x1800 0 0 0 0>;
+		bus-range = <2 2>;
+		apple,link-trained-by-bootloader;
+		#address-cells = <3>;
+		#size-cells = <2>;
+		ranges;
+		interrupt-controller;
+		#interrupt-cells = <1>;
+		interrupt-map-mask = <0 0 0 7>;
+		interrupt-map = <0 0 0 1 &port03 0 0 0 0>,
+			<0 0 0 2 &port03 0 0 0 1>,
+			<0 0 0 3 &port03 0 0 0 2>,
+			<0 0 0 4 &port03 0 0 0 3>;
+	};
+	/*
+	 * The N1 Wi-Fi/Bluetooth (106b:1900, its ROM), trained by the bootloader after the SMC
+	 * releases its reset. Its driver boots the firmware and has this port reset after the ROM
+	 * stage; Control, Alpha (Wi-Fi) and Beta (Bluetooth) then answer at functions 0-2.
+	 * Disabled with its DART: a bootloader that trains the port enables both and renumbers the
+	 * buses here (bus-range, reg, iommu-map) to the PCI core's order, port 0 first.
+	 */
+	port00: pci@0,0  {
+		device_type = "pci";
+		reg = <0x0 0 0 0 0>;
+		bus-range = <3 3>;
+		apple,link-trained-by-bootloader;
+		/*
+		 * Its PERST# (pci-bridge0 function-perst): /arm-io/gpio0 pin 0x50, pad
+		 * register 0x140 of pinctrl_ap, which owns the pad (and exposes it: see
+		 * its gpio-reserved-ranges below). Driven only by the root-port reset after
+		 * the N1's ROM stage.
+		 */
+		reset-gpios = <&pinctrl_ap 80 GPIO_ACTIVE_LOW>;
+		status = "disabled";
+		#address-cells = <3>;
+		#size-cells = <2>;
+		ranges;
+		interrupt-controller;
+		#interrupt-cells = <1>;
+		interrupt-map-mask = <0 0 0 7>;
+		interrupt-map = <0 0 0 1 &port00 0 0 0 0>,
+			<0 0 0 2 &port00 0 0 0 1>,
+			<0 0 0 3 &port00 0 0 0 2>,
+			<0 0 0 4 &port00 0 0 0 3>;
+		/* The firmware: the chip's image with this board's ticket; platform ID is
+		 * (board 0x10 << 16) | chip 0x6050
+		 */
+		n1_control: control@0,0  {
+			compatible = "pci106b,1900";
+			reg = <0x30000 0x0 0x0 0x0 0x0>;
+			firmware-name = "apple/centauri/j775c-ftab.bin";
+			apple,centauri-platform-id = <0x00106050>;
+			apple,centauri-protocol = <27>;
+		};
+		n1_alpha: wifi@0,1  {
+			compatible = "pci106b,1902";
+			reg = <0x30100 0x0 0x0 0x0 0x0>;
+			local-mac-address = [00 00 00 00 00 00];
+		};
+		n1_beta: bluetooth@0,2  {
+			compatible = "pci106b,1903";
+			reg = <0x30200 0x0 0x0 0x0 0x0>;
+			local-bd-address = [00 00 00 00 00 00];
+		};
+	};
 };
-
 #define T6050_J775C
 #include "t6050-peripherals.dtsi"
+&dockchannel  {
+	apple,tx-never-wait;
+	status = "okay";
+};
+&qspi  {
+	status = "okay";
+	flash@0  {
+		compatible = "jedec,spi-nor";
+		reg = <0>;
+		spi-max-frequency = <25000000>;
+		/* Single-wire, as on T8132's J713: no quad-enable status write at probe */
+		spi-rx-bus-width = <1>;
+		spi-tx-bus-width = <1>;
+		partitions  {
+			compatible = "fixed-partitions";
+			#address-cells = <1>;
+			#size-cells = <1>;
+			nvram: partition@700000  {
+				label = "nvram";
+				/* To be filled by the loader */
+				reg = <0x0 0x0>;
+				status = "disabled";
+			};
+		};
+	};
+};
+&pinctrl_ap  {
+	gpio-reserved-ranges = <0 80>, <81 140>;
+};
+&dart_apcie2  {
+	status = "okay";
+};
+&dart_apcie3  {
+	status = "okay";
+};
+#include "hwmon-fan-dual.dtsi"
+&smc_hwmon  {
+	fan-F0Ac  {
+		apple,fan-mode = "F0md";
+	};
+	fan-F1Ac  {
+		apple,fan-mode = "F1md";
+	};
+};
