@@ -193,3 +193,5 @@
 		apple,fan-mode = "F1md";
 	};
 };
+
+#include "t6050-j775c-usb.dtsi"
