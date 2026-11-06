@@ -1,0 +1,170 @@
+// SPDX-License-Identifier: GPL-2.0+ OR MIT
+/* J775c audio wiring; AOP is enabled only after loader handoff. */
+/  {
+	sound  {
+		compatible = "apple,j775c-macaudio", "apple,macaudio";
+		/*
+		 * No variant letter, as on J375/J475/J575: userspace (speakersafetyd,
+		 * the UCM profile, asahi-audio) keys on the card id "AppleJ775".
+		 */
+		model = "Mac Studio J775";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		dai-link@0  {
+			reg = <0>;
+			link-name = "Headphone Jack";
+			cpu  {
+				sound-dai = <&aop_audio 0>;
+			};
+			codec  {
+				sound-dai = <&jack_codec>;
+			};
+		};
+		dai-link@1  {
+			reg = <1>;
+			link-name = "Speaker";
+			cpu  {
+				sound-dai = <&aop_audio 3>;
+			};
+			codec  {
+				sound-dai = <&speaker_amp>;
+			};
+		};
+	};
+};
+&pinctrl_ap  {
+	/*
+	 * Every pin reads cleanly (evidence/dt/2026-10-30-gpio-qualification.md), but only
+	 * the pins a node in this file names are exposed: 80 (PCIe port 0's PERST#, ADT
+	 * pci-bridge0 function-perst), 106 (amp IRQ), 107 (amp shutdown), 134 (jack IRQ)
+	 * and 139 (jack codec reset), from the ADT's audio-speaker and audio-codec-output.
+	 * A reserved line cannot be requested (gpiolib answers -EINVAL), so a node that
+	 * names a new pin of pinctrl_ap opens it here too.
+	 */
+	gpio-reserved-ranges = <0 80>, <81 25>, <108 26>, <135 4>, <140 81>;
+};
+&i2c1  {
+	/*
+	 * ADT speaker-config 00 14 00 02: playback slot 0, amp gain 20, I sense in slot 0
+	 * and V sense in slot 2. The bytes are <slot, gain, I slot, V slot>: on J316 every
+	 * amp's row matches its validated imon/vmon pair (00 0f 00 02 is imon 0, vmon 2;
+	 * 01 0f 04 06 is imon 4, vmon 6), and J375/J473/J575 use imon 0, vmon 2 as well.
+	 * The firmware's speaker frame is 250 BCLKs of 12 MHz (ADT
+	 * iop-audio-controller/audio-speaker), which the amp's ratio detection rejects.
+	 */
+	speaker_amp: codec@38  {
+		compatible = "ti,sn012776", "ti,tas2764";
+		reg = <0x38>;
+		shutdown-gpios = <&pinctrl_ap 107 GPIO_ACTIVE_HIGH>;
+		interrupts-extended = <&pinctrl_ap 106 IRQ_TYPE_LEVEL_LOW>;
+		#sound-dai-cells = <0>;
+		ti,imon-slot-no = <0>;
+		ti,vmon-slot-no = <2>;
+	};
+};
+&i2c2  {
+	jack_codec: codec@4b  {
+		compatible = "cirrus,cs42l84";
+		reg = <0x4b>;
+		reset-gpios = <&pinctrl_ap 139 GPIO_ACTIVE_HIGH>;
+		interrupts-extended = <&pinctrl_ap 134 IRQ_TYPE_LEVEL_LOW>;
+		#sound-dai-cells = <0>;
+		sound-name-prefix = "Jack";
+	};
+};
+&pmgr0  {
+	ps_dispext0_adma: power-controller@270  {
+		compatible = "apple,t6050-pmgr-pwrstate", "apple,t8103-pmgr-pwrstate";
+		reg = <0x270 4>;
+		label = "dispext0_adma";
+		#power-domain-cells = <0>;
+		#reset-cells = <0>;
+	};
+};
+&dispext0_isoc_dart  {
+	status = "okay";
+	power-domains = <&ps_dispext0_adma>;
+	apple,dma-range = <0x100 0x0 0x10 0x0>;
+};
+&admac_dispext0  {
+	status = "okay";
+	power-domains = <&ps_dispext0_adma>;
+	apple,dma-range = <0x100 0x0 0x10 0x0>;
+};
+&dcpext0  {
+	ports  {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		port@0  {
+			reg = <0>;
+			dcpext0_audio: endpoint  {
+				remote-endpoint = <&dpaudio_dispext0_dcp>;
+			};
+		};
+	};
+};
+/  {
+	dpaudio_dispext0: audio-controller-dispext0  {
+		compatible = "apple,t6050-dpaudio", "apple,dpaudio";
+		dmas = <&admac_dispext0 0>;
+		dma-names = "tx";
+		ports  {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			port@0  {
+				reg = <0>;
+				dpaudio_dispext0_dcp: endpoint  {
+					remote-endpoint = <&dcpext0_audio>;
+				};
+			};
+		};
+	};
+};
+&pmgr0  {
+	ps_dispext1_adma: power-controller@2d8  {
+		compatible = "apple,t6050-pmgr-pwrstate", "apple,t8103-pmgr-pwrstate";
+		reg = <0x2d8 4>;
+		label = "dispext1_adma";
+		#power-domain-cells = <0>;
+		#reset-cells = <0>;
+	};
+};
+&dispext1_isoc_dart  {
+	status = "okay";
+	power-domains = <&ps_dispext1_adma>;
+	apple,dma-range = <0x100 0x0 0x10 0x0>;
+};
+&admac_dispext1  {
+	status = "okay";
+	power-domains = <&ps_dispext1_adma>;
+	apple,dma-range = <0x100 0x0 0x10 0x0>;
+};
+&dcpext1  {
+	ports  {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		port@0  {
+			reg = <0>;
+			dcpext1_audio: endpoint  {
+				remote-endpoint = <&dpaudio_dispext1_dcp>;
+			};
+		};
+	};
+};
+/  {
+	dpaudio_dispext1: audio-controller-dispext1  {
+		compatible = "apple,t6050-dpaudio", "apple,dpaudio";
+		dmas = <&admac_dispext1 0>;
+		dma-names = "tx";
+		ports  {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			port@0  {
+				reg = <0>;
+				dpaudio_dispext1_dcp: endpoint  {
+					remote-endpoint = <&dcpext1_audio>;
+				};
+			};
+		};
+	};
+};

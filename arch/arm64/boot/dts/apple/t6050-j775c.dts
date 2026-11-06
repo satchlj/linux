@@ -198,3 +198,4 @@
 #include "t6050-j775c-usb4.dtsi"
 #include "t6050-max-gpu.dtsi"
 #include "t6050-j775c-display.dtsi"
+#include "t6050-j775c-audio.dtsi"
