@@ -1,0 +1,161 @@
+// SPDX-License-Identifier: GPL-2.0+ OR MIT
+/* J775c external display routes. The loader enables accepted engines. */
+/  {
+	display: display-subsystem  {
+		compatible = "apple,display-subsystem";
+		iommus = <&dart_dispext0 0>, <&dispext1_dart 0>;
+		status = "disabled";
+	};
+};
+&dcpext0  {
+	apple,connector-type = "USB-C";
+	apple,dptx-die = <0>;
+	apple,typec-dptx-phys = <2 1 3 0>;
+	apple,typec-mux-indices = <0 0 0 0>;
+	phys = <&atc2_phy 6>, <&atc1_phy 6>, <&atc3_phy 6>, <&atc0_phy 6>;
+	phy-names = "typec0", "typec1", "typec2", "typec3";
+	mux-controls = <&atc2_xbar 0>, <&atc1_dpxbar 0>, <&atc3_dpxbar 0>, <&atc0_dpxbar 0>;
+	mux-control-names = "typec0", "typec1", "typec2", "typec3";
+	typec-routes  {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		route@0  {
+			reg = <0>;
+			mode-switch;
+			port  {
+				dcpext0_typec: endpoint  {
+					remote-endpoint = <&hpm2_dp>;
+				};
+			};
+		};
+		route@1  {
+			reg = <1>;
+			mode-switch;
+			port  {
+				dcpext0_typec1: endpoint  {
+					remote-endpoint = <&hpm1_dp>;
+				};
+			};
+		};
+		route@2  {
+			reg = <2>;
+			mode-switch;
+			port  {
+				dcpext0_typec2: endpoint  {
+					remote-endpoint = <&hpm3_dp>;
+				};
+			};
+		};
+		route@3  {
+			reg = <3>;
+			mode-switch;
+			port  {
+				dcpext0_typec3: endpoint  {
+					remote-endpoint = <&hpm0_dp>;
+				};
+			};
+		};
+	};
+};
+&hpm0  {
+	connector  {
+		ports  {
+			port@2  {
+				reg = <2>;
+				hpm0_dp: endpoint  {
+					remote-endpoint = <&dcpext0_typec3>;
+				};
+			};
+		};
+	};
+};
+&hpm1  {
+	connector  {
+		ports  {
+			port@2  {
+				reg = <2>;
+				hpm1_dp: endpoint  {
+					remote-endpoint = <&dcpext0_typec1>;
+				};
+			};
+		};
+	};
+};
+&hpm2  {
+	connector  {
+		ports  {
+			port@2  {
+				reg = <2>;
+				hpm2_dp: endpoint  {
+					remote-endpoint = <&dcpext0_typec>;
+				};
+			};
+		};
+	};
+};
+&hpm3  {
+	connector  {
+		ports  {
+			port@2  {
+				reg = <2>;
+				hpm3_dp: endpoint  {
+					remote-endpoint = <&dcpext0_typec2>;
+				};
+			};
+		};
+	};
+};
+&dcpext1  {
+	apple,bw-scratch = <&dcpext0_pmc 0 5 0x30000>;
+	/* The ADT external-index (iop-dcpext1-nub), as dcpext0's 1 */
+	apple,dcp-index = <2>;
+	apple,clock-ids;
+	apple,connector-type = "HDMI-A";
+	apple,dptx-die = <0>;
+	apple,dptx-phy = <4>;
+	/*
+	 * The fixed HDMI route: the PHY (its source select picks this engine), the
+	 * converter's hotplug output (AOP GPIO 14, active high) and its two power
+	 * enables (the SMC's pcIO lines).
+	 */
+	phys = <&lpdptx_phy0>;
+	phy-names = "dp-phy";
+	hdmi-hpd-gpios = <&pinctrl_aop 14 GPIO_ACTIVE_HIGH>;
+	hdmi-pwren-gpios = <&smc_pcio 0 GPIO_ACTIVE_HIGH>;
+	dp2hdmi-pwren-gpios = <&smc_pcio 1 GPIO_ACTIVE_HIGH>;
+};
+&dcpext1_dart  {
+	apple,dma-range = <0x100 0x0 0x300 0x0>;
+};
+&dispext1_dart  {
+	reg = <0x3 0x92300000 0x0 0xc000>;
+	apple,dma-range = <0x100 0x0 0x300 0x0>;
+};
+&lpdptx_phy0  {
+	apple,pll-dcocfg = <3>;
+	apple,pll-dtcvreg = <15>;
+	apple,pll-dtccal = <2>;
+	apple,pll-dcdadj = <16>;
+	apple,pll-dlfcfg = <3>;
+	apple,pclkdrv-select = <1>;
+	/* dcpext1's route: the crossbar's ufp endpoint 1 (source select 2) */
+	apple,ufp-endpoint = <1>;
+};
+&pinctrl_aop  {
+	gpio-reserved-ranges = <0 14>, <15 62>, <78 1>, <80 1>, <82 1>, <84 1>;
+};
+&smc_pcio  {
+	apple,output-commands = /bits/ 64 <0x000f000000800000 0x001a000000000000>;
+};
+&atc0_dpxbar  {
+	status = "okay";
+};
+&atc1_dpxbar  {
+	status = "okay";
+};
+&atc2_xbar  {
+	status = "okay";
+};
+&atc3_dpxbar  {
+	status = "okay";
+};

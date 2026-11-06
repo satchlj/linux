@@ -193,7 +193,8 @@
 		apple,fan-mode = "F1md";
 	};
 };
-
 #include "t6050-j775c-usb.dtsi"
 
 #include "t6050-j775c-usb4.dtsi"
+#include "t6050-max-gpu.dtsi"
+#include "t6050-j775c-display.dtsi"
