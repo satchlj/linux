@@ -1,0 +1,54 @@
+// SPDX-License-Identifier: GPL-2.0+ OR MIT
+/* GL9755: Aura #163 powers and trains this optional port before enabling it. */
+&pcie0  {
+	reg = <0x1c 0xb0000000 0 0x10000000>,
+		<4 0x14000000 0 0x4000>,
+		<4 0x12028000 0 0x8000>,
+		<4 0x17018000 0 0x4000>,
+		<4 0x12024000 0 0x4000>,
+		<4 0x13028000 0 0x8000>,
+		<4 0x1701c000 0 0x4000>,
+		<4 0x13024000 0 0x4000>,
+		<4 0x10028000 0 0x8000>,
+		<4 0x17010000 0 0x4000>,
+		<4 0x10024000 0 0x4000>,
+		<4 0x11028000 0 0x8000>,
+		<4 0x17014000 0 0x4000>,
+		<4 0x11024000 0 0x4000>;
+	reg-names = "config", "rc", "port2", "phy2", "intr2axi2",
+		"port3", "phy3", "intr2axi3",
+		"port0", "phy0", "intr2axi0",
+		"port1", "phy1", "intr2axi1";
+	interrupts = <AIC_IRQ 0 1539 IRQ_TYPE_LEVEL_HIGH>,
+		<AIC_IRQ 0 1547 IRQ_TYPE_LEVEL_HIGH>,
+		<AIC_IRQ 0 1523 IRQ_TYPE_LEVEL_HIGH>,
+		<AIC_IRQ 0 1531 IRQ_TYPE_LEVEL_HIGH>;
+	interrupt-names = "port2", "port3", "port0", "port1";
+	iommu-map = <0x100 &dart_apcie2 1 1>, <0x200 &dart_apcie3 1 1>,
+		<0x300 &dart_apcie0 1 3>, <0x400 &apcie1_dart 1 1>;
+	bus-range = <0 4>;
+	port01: pci@1,0  {
+		device_type = "pci";
+		reg = <0x800 0 0 0 0>;
+		bus-range = <4 4>;
+		apple,link-trained-by-bootloader;
+		status = "disabled";
+		#address-cells = <3>;
+		#size-cells = <2>;
+		ranges;
+		interrupt-controller;
+		#interrupt-cells = <1>;
+		interrupt-map-mask = <0 0 0 7>;
+		interrupt-map = <0 0 0 1 &port01 0 0 0 0>,
+			<0 0 0 2 &port01 0 0 0 1>,
+			<0 0 0 3 &port01 0 0 0 2>,
+			<0 0 0 4 &port01 0 0 0 3>;
+		/* ADT card-detect-polarity = write-protect-polarity = 1. */
+		sdcard@0,0  {
+			compatible = "pci17a0,9755";
+			reg = <0x40000 0 0 0 0>;
+			cd-inverted;
+			wp-inverted;
+		};
+	};
+};
