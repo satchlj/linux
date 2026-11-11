@@ -2357,8 +2357,10 @@ static void apple_nhi_link_lost(struct tb_nhi *nhi)
 	u64 activity = atomic64_read(&anhi->tb->remote_activity);
 
 	/* A peer was found since the last cycle: that cycle worked */
-	if (apple_cio_recovery_progress(activity,
-					 READ_ONCE(acio->link_lost_cycle_activity)))
+	if (of_machine_is_compatible("apple,j775c") ?
+	    apple_cio_recovery_progress(activity,
+				 READ_ONCE(acio->link_lost_cycle_activity)) :
+	    activity != READ_ONCE(acio->link_lost_cycle_activity))
 		WRITE_ONCE(acio->link_lost_cycles, 0);
 	WRITE_ONCE(acio->link_lost_gen, READ_ONCE(acio->start_gen));
 	mod_delayed_work(system_freezable_wq, &acio->link_lost_work,
@@ -3496,8 +3498,9 @@ static void apple_cio_link_lost_work(struct work_struct *work)
 		if (acio->removing || !acio->current_cable_info ||
 		    !acio->target_cable_info ||
 		    acio->sleep_phase != APPLE_CIO_SLEEP_OPEN ||
-		    acio->resume_recovery_failed || apple_cio_recovering(acio) ||
-		    acio->sleep_restart_owed ||
+		    acio->resume_recovery_failed ||
+		    (of_machine_is_compatible("apple,j775c") &&
+		     (apple_cio_recovering(acio) || acio->sleep_restart_owed)) ||
 		    acio->start_gen != READ_ONCE(acio->link_lost_gen))
 			return;
 		if (apple_cio_has_peer(acio, &activity))
