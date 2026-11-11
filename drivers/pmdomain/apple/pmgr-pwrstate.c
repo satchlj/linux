@@ -20,6 +20,7 @@
 #include <linux/reset-controller.h>
 #include <linux/module.h>
 #include <linux/soc/apple/pmgr-pwrstate.h>
+#include <linux/soc/apple/pmgr-pwrstate.h>
 #include <linux/soc/apple/t8132.h>
 
 #define APPLE_PMGR_RESET        BIT(31)
@@ -420,6 +421,37 @@ out:
 	return ret;
 }
 EXPORT_SYMBOL_GPL(apple_pmgr_ps_cycle);
+
+int apple_pmgr_verify_off(struct device *dev)
+{
+	struct generic_pm_domain *genpd;
+	struct apple_pmgr_ps *ps;
+	u32 value = 0;
+	int ret;
+
+	if (!dev->pm_domain)
+		return -ENODEV;
+	genpd = pd_to_genpd(dev->pm_domain);
+	if (genpd->power_off != apple_pmgr_ps_power_off)
+		return -EOPNOTSUPP;
+	ps = genpd_to_apple_pmgr_ps(genpd);
+	if (ps->firmware_owned || ps->inherited_on ||
+	    (genpd->flags & GENPD_FLAG_ALWAYS_ON))
+		return -EBUSY;
+	ret = regmap_read_poll_timeout_atomic(ps->regmap, ps->offset, value,
+		FIELD_GET(APPLE_PMGR_PS_TARGET, value) == APPLE_PMGR_PS_PWRGATE &&
+		FIELD_GET(APPLE_PMGR_PS_ACTUAL, value) == APPLE_PMGR_PS_PWRGATE &&
+		!(value & APPLE_PMGR_BUSY), 1, APPLE_PMGR_PS_SET_TIMEOUT);
+	if (ret)
+		dev_err(ps->dev, "PS %s: off readback failed target=%#x actual=%#x raw=%#x error=%d\n",
+			genpd->name, (u32)FIELD_GET(APPLE_PMGR_PS_TARGET, value),
+			(u32)FIELD_GET(APPLE_PMGR_PS_ACTUAL, value), value, ret);
+	else
+		dev_dbg(ps->dev, "PS %s: hardware off confirmed target=0 actual=0 raw=%#x\n",
+			 genpd->name, value);
+	return ret;
+}
+EXPORT_SYMBOL_GPL(apple_pmgr_verify_off);
 
 static void apple_pmgr_ps_set_system_sleep(struct device *dev, bool sleep)
 {

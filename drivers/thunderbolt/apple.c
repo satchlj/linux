@@ -89,6 +89,7 @@
 #include <linux/mutex.h>
 #include <linux/string.h>
 #include <linux/suspend.h>
+#include <linux/soc/apple/pmgr-pwrstate.h>
 #include <linux/of.h>
 #include <linux/of_address.h>
 #include <linux/of_graph.h>
@@ -382,6 +383,8 @@ struct apple_cio {
 	struct reset_control *reset;
 
 	struct dev_pm_domain_list *pd_list;
+	bool *pd_owned;
+	bool reset_pending;
 
 	struct mutex lock; /* serializes cable transitions and ACIO power up/down */
 	bool removing; /* protected by lock */
@@ -3008,14 +3011,58 @@ static void apple_cio_cpu_halt(struct apple_cio *acio)
  * dropping the power-domain links. The Type-C PHY must remain configured
  * until this function returns. The caller must hold @acio->lock.
  */
+static int apple_cio_power_off(struct apple_cio *acio)
+{
+	int i, ret, error = 0;
+
+	for (i = acio->pd_list->num_pds - 1; i >= 0; i--) {
+		struct device *pd = acio->pd_list->pd_devs[i];
+
+		if (acio->pd_list->pd_links[i])
+			device_link_del(acio->pd_list->pd_links[i]);
+		acio->pd_list->pd_links[i] = NULL;
+		dev_pm_syscore_device(pd, false);
+		if (!(acio->hw == &apple_cio_t6050_hw) || !acio->pd_owned[i])
+			continue;
+		dev_pm_genpd_synced_poweroff(pd);
+		ret = pm_runtime_put_sync_suspend(pd);
+		if (ret < 0) {
+			/* put consumed our reference even when suspend failed. */
+			pm_runtime_get_noresume(pd);
+			if (!error)
+				error = ret;
+		} else {
+			acio->pd_owned[i] = false;
+		}
+	}
+	if (!(acio->hw == &apple_cio_t6050_hw))
+		return 0;
+	/* A suspended virtual device alone does not certify a shared domain off. */
+	for (i = 0; i < acio->pd_list->num_pds; i++) {
+		ret = apple_pmgr_verify_off(acio->pd_list->pd_devs[i]);
+		if (ret && !error)
+			error = ret;
+	}
+	acio->reset_pending = !!error;
+	if (error)
+		dev_err(acio->dev, "CIO reset boundary not established: %d\n", error);
+	else
+		dev_dbg(acio->dev, "CIO domains synchronously off; reset boundary established\n");
+	return error;
+}
+
 static void apple_cio_stop(struct apple_cio *acio)
 {
-	int ret, i;
+	int ret;
 
 	lockdep_assert_held(&acio->lock);
-	if (!acio->current_cable_info)
+	if (!acio->current_cable_info) {
+		if (acio->reset_pending)
+			apple_cio_power_off(acio);
 		return;
+	}
 	apple_cio_remove_children(acio);
+	dev_dbg(acio->dev, "USB4 teardown: children removed\n");
 
 	/* Try to shut down and power off the co-processor gracefully */
 	ret = apple_rtkit_poweroff(acio->rtk);
@@ -3033,12 +3080,7 @@ static void apple_cio_stop(struct apple_cio *acio)
 				     APPLE_CIO_LSTX_CTRL_LEVEL));
 
 	/* Finally, remove the links to the PD domains to power everything off */
-	for (i = 0; i < acio->pd_list->num_pds; i++) {
-		if (acio->pd_list->pd_links[i])
-			device_link_del(acio->pd_list->pd_links[i]);
-		acio->pd_list->pd_links[i] = NULL;
-		dev_pm_syscore_device(acio->pd_list->pd_devs[i], false);
-	}
+	apple_cio_power_off(acio);
 
 	acio->current_cable_info = 0;
 	acio->resume_link_failed = false;
@@ -3099,6 +3141,12 @@ static int apple_cio_start(struct apple_cio *acio)
 
 	lockdep_assert_held(&acio->lock);
 
+	if ((acio->hw == &apple_cio_t6050_hw) && acio->reset_pending) {
+		ret = apple_cio_power_off(acio);
+		if (ret)
+			return ret;
+	}
+
 	/*
 	 * PCIe-C's power domain stays on across cable teardown, so apart from
 	 * this reset nothing returns the controller to a known state between
@@ -3122,7 +3170,15 @@ static int apple_cio_start(struct apple_cio *acio)
 
 	/* Create device links to the power domains in order to power them on */
 	for (i = 0; i < acio->pd_list->num_pds; i++) {
+		if (acio->hw == &apple_cio_t6050_hw) {
+			ret = pm_runtime_resume_and_get(acio->pd_list->pd_devs[i]);
+			if (ret < 0)
+				goto remove_links;
+			acio->pd_owned[i] = true;
+			acio->reset_pending = true;
+		}
 		link = device_link_add(acio->dev, acio->pd_list->pd_devs[i],
+				       (acio->hw == &apple_cio_t6050_hw) ? DL_FLAG_STATELESS :
 				       DL_FLAG_STATELESS | DL_FLAG_PM_RUNTIME | DL_FLAG_RPM_ACTIVE);
 		if (!link) {
 			ret = -ENODEV;
@@ -3138,6 +3194,8 @@ static int apple_cio_start(struct apple_cio *acio)
 		 */
 		dev_pm_syscore_device(acio->pd_list->pd_devs[i], true);
 	}
+
+	dev_dbg(acio->dev, "USB4 restore: domains on\n");
 
 	/*
 	 * After the power domains are on we need to signal and wait for the ACIO block
@@ -3282,6 +3340,7 @@ static int apple_cio_start(struct apple_cio *acio)
 		goto err_depopulate;
 	}
 
+	dev_dbg(acio->dev, "USB4 restore: NHI ready\n");
 	acio->current_cable_info = acio->target_cable_info;
 	acio->start_gen++;
 	return 0;
@@ -3299,12 +3358,7 @@ remove_links:
 	acio->rtk = NULL;
 	apple_cio_cpu_halt(acio);
 	/* Cut power to reset the entire block  */
-	for (i = 0; i < acio->pd_list->num_pds; i++) {
-		if (acio->pd_list->pd_links[i])
-			device_link_del(acio->pd_list->pd_links[i]);
-		acio->pd_list->pd_links[i] = NULL;
-		dev_pm_syscore_device(acio->pd_list->pd_devs[i], false);
-	}
+	apple_cio_power_off(acio);
 	return ret;
 }
 
@@ -3657,7 +3711,7 @@ static int apple_cio_tbt_switch_set(struct typec_thunderbolt_switch_dev *sw,
 	}
 
 	apple_cio_stop(acio);
-	return 0;
+	return acio->reset_pending ? -EAGAIN : 0;
 }
 
 static void apple_cio_sleep_teardown(struct apple_cio *acio)
@@ -3956,6 +4010,11 @@ static int apple_cio_probe(struct platform_device *pdev)
 		return dev_err_probe(dev, -EINVAL, "Not enough PM domains\n");
 
 	acio->dpin_count = acio->hw->dpin_count ?: 2;
+	acio->pd_owned = devm_kcalloc(dev, acio->pd_list->num_pds,
+				     sizeof(*acio->pd_owned), GFP_KERNEL);
+	if (!acio->pd_owned)
+		return -ENOMEM;
+
 	acio->connector_np = of_graph_get_remote_node(dev->of_node, 1, -1);
 	acio->dp_dual_stream = apple_dp_tunnel_dual_stream(acio->connector_np);
 	/* Register layout, root qualification and connector wiring are separate. */
