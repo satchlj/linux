@@ -713,33 +713,9 @@
  * because the core list is the board's: one die, six cores per cluster.
  */
 / {
-	pmu-m {
-		compatible = "apple,t6050-mcore-pmu";
-		interrupt-parent = <&aic>;
-		interrupts = <AIC_FIQ 0 AIC_CPU_PMU_E IRQ_TYPE_LEVEL_HIGH>;
-	};
 
-	pmu-p {
-		compatible = "apple,t6050-pcore-pmu";
-		interrupt-parent = <&aic>;
-		interrupts = <AIC_FIQ 0 AIC_CPU_PMU_P IRQ_TYPE_LEVEL_HIGH>;
-	};
 };
 
-&aic {
-	affinities {
-		m-core-pmu-affinity {
-			apple,fiq-index = <AIC_CPU_PMU_E>;
-			cpus = <&cpu0 &cpu1 &cpu2 &cpu3 &cpu4 &cpu5
-				&cpu6 &cpu7 &cpu8 &cpu9 &cpu10 &cpu11>;
-		};
-
-		p-core-pmu-affinity {
-			apple,fiq-index = <AIC_CPU_PMU_P>;
-			cpus = <&cpu12 &cpu13 &cpu14 &cpu15 &cpu16 &cpu17>;
-		};
-	};
-};
 
 /* J775D's die-1 PD controllers (hpm4, hpm5 on nub-spmi-a2) don't exist on J775c */
 /delete-node/ &hpm4;
