@@ -1517,6 +1517,94 @@ static void cd321x_event_lost(struct cd321x *cd321x)
  */
 static int cd321x_check_setup(struct cd321x *cd321x, u64 event);
 
+static int tps6598x_check_mode(struct tps6598x *tps);
+
+static int cd321x_reset_inherited_connection(struct tps6598x *tps, u32 *status,
+					     bool recovery)
+{
+	static const struct {
+		const char *compatible;
+		u8 key[4];
+	} keys[] = {
+		{ "apple,j716c", { '6', '1', '7', 'J' } },
+		{ "apple,j775c", { '5', '7', '7', 'J' } },
+	};
+	const u8 *key = NULL;
+	unsigned int i;
+	static const u8 locked[4];
+	u8 delay = 5, result;
+	unsigned long timeout;
+	int ret, lock_ret, mode;
+	u32 cmd;
+
+	for (i = 0; i < ARRAY_SIZE(keys); i++)
+		if (of_machine_is_compatible(keys[i].compatible)) {
+			key = keys[i].key;
+			break;
+		}
+	if (!key ||
+	    (!recovery && !device_property_read_bool(tps->dev,
+					     "apple,reset-inherited-usb2-connection")) ||
+	    !device_is_compatible(tps->dev, "apple,sn201202x") ||
+	    tps->dbma_at_probe || !(*status & TPS_STATUS_PLUG_PRESENT) ||
+	    (!recovery && !TPS_STATUS_TO_TYPEC_DATAROLE(*status)))
+		return 0;
+	mode = tps6598x_check_mode(tps);
+	if (mode != TPS_MODE_APP && mode != TPS_MODE_APP1)
+		return 0;
+
+	/* All suppliers are available, but no USB or router session has started. */
+	ret = tps6598x_exec_cmd(tps, "LOCK", 4, key, sizeof(result), &result);
+	if (ret)
+		return ret;
+	if (result) {
+		ret = -EIO;
+		goto relock;
+	}
+
+	/*
+	 * Nonzero DISC delay restores normal CC detection automatically. The
+	 * task can take more than a second to acknowledge at boot; wait for it
+	 * before issuing LOCK, which a still-busy controller would reject.
+	 */
+	ret = tps6598x_exec_cmd_tmo(tps, "DISC", sizeof(delay), &delay, 0, NULL,
+				  5000, 0);
+	if (!ret) {
+		msleep(5100);
+		timeout = jiffies + msecs_to_jiffies(2000);
+		do {
+			mode = tps6598x_check_mode(tps);
+			if (mode == TPS_MODE_APP || mode == TPS_MODE_APP1)
+				break;
+			msleep(20);
+		} while (time_before(jiffies, timeout));
+		if (mode != TPS_MODE_APP && mode != TPS_MODE_APP1)
+			ret = mode < 0 ? mode : -ETIMEDOUT;
+	}
+relock:
+	/* Probe retains its original command budget and ordering. */
+	timeout = jiffies + msecs_to_jiffies(15000);
+	do {
+		lock_ret = tps6598x_exec_cmd_tmo(tps, "LOCK", sizeof(locked), locked,
+					       0, NULL, recovery ? 10000 : 5000, 0);
+		if (!recovery || !lock_ret || time_after_eq(jiffies, timeout))
+			break;
+		/* A timed-out task may still own CMD1: never overwrite it. */
+		if (tps6598x_read32(tps, TPS_REG_CMD1, &cmd) || cmd)
+			break;
+		msleep(100);
+	} while (time_before(jiffies, timeout));
+	if (ret || lock_ret)
+		return ret ?: lock_ret;
+	if (!tps6598x_read_status(tps, status))
+		return -EIO;
+	tps->status = *status;
+	dev_info(tps->dev, "%s\n", recovery ? "PD recovery: DISC and relock complete" :
+		 "reinitialized inherited USB2 connection");
+	return 0;
+}
+
+
 static void cd321x_resume_work(struct work_struct *work)
 {
 	struct cd321x *cd321x = container_of(to_delayed_work(work),
@@ -1525,7 +1613,7 @@ static void cd321x_resume_work(struct work_struct *work)
 	unsigned int notes;
 	u32 status;
 	int ret;
-	bool fault, ready, restore;
+	bool fault, ready, restore, escalate;
 
 	guard(mutex)(&tps->lock);
 	if (cd321x->pm.phase == CD321X_PM_INITIALIZING ||
@@ -1536,7 +1624,8 @@ static void cd321x_resume_work(struct work_struct *work)
 	if (cd321x->pm.setup_pending && cd321x_check_setup(cd321x, 0) < 0)
 		return;
 
-	fault = atomic_xchg(&cd321x->link_event, 0);
+	escalate = atomic_xchg(&cd321x->escalate_event, 0);
+	fault = atomic_xchg(&cd321x->link_event, 0) || escalate;
 	ready = atomic_xchg(&cd321x->ready_event, 0);
 	restore = atomic_xchg(&cd321x->restore_event, 0);
 	notes = cd321x_pm_notifications(&cd321x->pm, fault, ready, restore);
@@ -1577,6 +1666,30 @@ static void cd321x_resume_work(struct work_struct *work)
 			goto retry;
 	}
 
+	if (escalate && (notes & CD321X_PM_FAULT_ACCEPTED) &&
+	    (status & TPS_STATUS_PLUG_PRESENT)) {
+		struct typec_thunderbolt_switch_data recovery = {
+			.state = TYPEC_THUNDERBOLT_SWITCH_CHECK_RECOVERY,
+		};
+
+		ret = typec_thunderbolt_switch_set(cd321x->tbt_switch, &recovery);
+		if (ret == -ENOLINK) {
+			/* Drain the NHI before DISC; IRQs cannot race this PD mutex. */
+			recovery.state = TYPEC_THUNDERBOLT_SWITCH_OFF;
+			ret = typec_thunderbolt_switch_set(cd321x->tbt_switch, &recovery);
+			if (ret)
+				goto retry;
+			ret = cd321x_reset_inherited_connection(tps, &status, true);
+			if (ret) {
+				dev_err(tps->dev, "PD disconnect recovery failed: %d\n", ret);
+				goto retry;
+			}
+			cd321x->pm.force_reconnect = true;
+			if (!tps->data->read_data_status(tps))
+				goto retry;
+		}
+	}
+
 	/* Also report a cable removed during sleep, even if its IRQ was lost. */
 	cd321x_pm_snapshot_ready(&cd321x->pm);
 	tps->data->connect(tps, status);
@@ -1591,6 +1704,7 @@ static void cd321x_prepare(struct tps6598x *tps)
 	struct cd321x *cd321x = container_of(tps, struct cd321x, tps);
 
 	scoped_guard(mutex, &tps->lock) {
+		atomic_set(&cd321x->escalate_event, 0);
 		cd321x_pm_prepare(&cd321x->pm);
 		cd321x->state_valid = false;
 	}
@@ -2177,11 +2291,14 @@ static int cd321x_tbt_notify(struct notifier_block *nb,
 
 	if (event != TYPEC_THUNDERBOLT_SWITCH_REVALIDATE &&
 	    event != TYPEC_THUNDERBOLT_SWITCH_READY &&
-	    event != TYPEC_THUNDERBOLT_SWITCH_RESTORE)
+	    event != TYPEC_THUNDERBOLT_SWITCH_RESTORE &&
+	    event != TYPEC_THUNDERBOLT_SWITCH_ESCALATE)
 		return NOTIFY_DONE;
 
 	/* Publish the event even if the worker is already reading or applying. */
-	if (event == TYPEC_THUNDERBOLT_SWITCH_READY)
+	if (event == TYPEC_THUNDERBOLT_SWITCH_ESCALATE)
+		atomic_set(&cd321x->escalate_event, 1);
+	else if (event == TYPEC_THUNDERBOLT_SWITCH_READY)
 		atomic_set(&cd321x->ready_event, 1);
 	else if (event == TYPEC_THUNDERBOLT_SWITCH_RESTORE)
 		atomic_set(&cd321x->restore_event, 1);
@@ -2357,6 +2474,7 @@ VISIBLE_IF_KUNIT void cd321x_init_work(struct cd321x *cd321x)
 	INIT_DELAYED_WORK(&cd321x->resume_work, cd321x_resume_work);
 	INIT_WORK(&cd321x->tbt_attach_work, cd321x_tbt_attach_work);
 	atomic_set(&cd321x->link_event, 0);
+	atomic_set(&cd321x->escalate_event, 0);
 	atomic_set(&cd321x->ready_event, 0);
 	atomic_set(&cd321x->restore_event, 0);
 	cd321x_pm_init(&cd321x->pm);
@@ -2951,90 +3069,6 @@ static int cd321x_remove(struct tps6598x *tps)
 	return 0;
 }
 
-static int cd321x_reset_inherited_connection(struct tps6598x *tps, u32 *status,
-					     bool recovery)
-{
-	static const struct {
-		const char *compatible;
-		u8 key[4];
-	} keys[] = {
-		{ "apple,j716c", { '6', '1', '7', 'J' } },
-		{ "apple,j775c", { '5', '7', '7', 'J' } },
-	};
-	const u8 *key = NULL;
-	unsigned int i;
-	static const u8 locked[4];
-	u8 delay = 5, result;
-	unsigned long timeout;
-	int ret, lock_ret, mode;
-	u32 cmd;
-
-	for (i = 0; i < ARRAY_SIZE(keys); i++)
-		if (of_machine_is_compatible(keys[i].compatible)) {
-			key = keys[i].key;
-			break;
-		}
-	if (!key ||
-	    (!recovery && !device_property_read_bool(tps->dev,
-					     "apple,reset-inherited-usb2-connection")) ||
-	    !device_is_compatible(tps->dev, "apple,sn201202x") ||
-	    tps->dbma_at_probe || !(*status & TPS_STATUS_PLUG_PRESENT) ||
-	    (!recovery && !TPS_STATUS_TO_TYPEC_DATAROLE(*status)))
-		return 0;
-	mode = tps6598x_check_mode(tps);
-	if (mode != TPS_MODE_APP && mode != TPS_MODE_APP1)
-		return 0;
-
-	/* All suppliers are available, but no USB or router session has started. */
-	ret = tps6598x_exec_cmd(tps, "LOCK", 4, key, sizeof(result), &result);
-	if (ret)
-		return ret;
-	if (result) {
-		ret = -EIO;
-		goto relock;
-	}
-
-	/*
-	 * Nonzero DISC delay restores normal CC detection automatically. The
-	 * task can take more than a second to acknowledge at boot; wait for it
-	 * before issuing LOCK, which a still-busy controller would reject.
-	 */
-	ret = tps6598x_exec_cmd_tmo(tps, "DISC", sizeof(delay), &delay, 0, NULL,
-				  5000, 0);
-	if (!ret) {
-		msleep(5100);
-		timeout = jiffies + msecs_to_jiffies(2000);
-		do {
-			mode = tps6598x_check_mode(tps);
-			if (mode == TPS_MODE_APP || mode == TPS_MODE_APP1)
-				break;
-			msleep(20);
-		} while (time_before(jiffies, timeout));
-		if (mode != TPS_MODE_APP && mode != TPS_MODE_APP1)
-			ret = mode < 0 ? mode : -ETIMEDOUT;
-	}
-relock:
-	/* Probe retains its original command budget and ordering. */
-	timeout = jiffies + msecs_to_jiffies(15000);
-	do {
-		lock_ret = tps6598x_exec_cmd_tmo(tps, "LOCK", sizeof(locked), locked,
-					       0, NULL, recovery ? 10000 : 5000, 0);
-		if (!recovery || !lock_ret || time_after_eq(jiffies, timeout))
-			break;
-		/* A timed-out task may still own CMD1: never overwrite it. */
-		if (tps6598x_read32(tps, TPS_REG_CMD1, &cmd) || cmd)
-			break;
-		msleep(100);
-	} while (time_before(jiffies, timeout));
-	if (ret || lock_ret)
-		return ret ?: lock_ret;
-	if (!tps6598x_read_status(tps, status))
-		return -EIO;
-	tps->status = *status;
-	dev_info(tps->dev, "%s\n", recovery ? "PD recovery: DISC and relock complete" :
-		 "reinitialized inherited USB2 connection");
-	return 0;
-}
 
 int tipd_init(struct tps6598x *tps)
 {

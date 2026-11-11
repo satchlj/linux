@@ -160,6 +160,7 @@ ASAHI_TESTS = {
                                    'usb-rpm', 'vlp-client', 'six-band'), out('--output'))
         + [(out('--output') + ['--old-usb'], KILL), (out('--output') + ['--old-regulatory'], KILL)],
     'pciec-policy-tests.py': [(out(), PASS)],
+    't6050-recovery-tests.py': [([], PASS)],
     'pmgr-bus-tests.py': [([], PASS)],
     'pmp-agx-vote-tests.py': [(out('--output'), PASS), (out('--output') + ['--mutations'], PASS)],
     'pmp-j613-hwmon-tests.py': [([], PASS)],

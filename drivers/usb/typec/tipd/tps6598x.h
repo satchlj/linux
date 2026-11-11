@@ -463,6 +463,7 @@ struct cd321x {
 	struct work_struct tbt_attach_work;
 	bool tbt_watch_registered;
 	atomic_t link_event;
+	atomic_t escalate_event;
 	atomic_t ready_event;
 	atomic_t restore_event;
 	bool display_route_active;
