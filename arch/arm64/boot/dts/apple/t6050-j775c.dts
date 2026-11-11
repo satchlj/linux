@@ -700,41 +700,8 @@
 		};
 	};
 
-	cpu5: cpu@40005 {
-		compatible = "apple,sawtooth";
-		capacity-dmips-mhz = <768>;
-		device_type = "cpu";
-		reg = <0x0 0x40005>;
-		enable-method = "spin-table";
-		operating-points-v2 = <&mcluster_opp>;
-		performance-domains = <&cpufreq_mc00>;
-		cpu-release-addr = <0 0>;
-		next-level-cache = <&l2_cache_m00>;
-	};
 
-	cpu11: cpu@40105 {
-		compatible = "apple,sawtooth";
-		capacity-dmips-mhz = <768>;
-		device_type = "cpu";
-		reg = <0x0 0x40105>;
-		enable-method = "spin-table";
-		operating-points-v2 = <&mcluster_opp>;
-		performance-domains = <&cpufreq_mc10>;
-		cpu-release-addr = <0 0>;
-		next-level-cache = <&l2_cache_m01>;
-	};
 
-	cpu17: cpu@10205 {
-		compatible = "apple,everest";
-		capacity-dmips-mhz = <1024>;
-		device_type = "cpu";
-		reg = <0x0 0x10205>;
-		enable-method = "spin-table";
-		operating-points-v2 = <&pcluster_opp>;
-		performance-domains = <&cpufreq_pc0>;
-		cpu-release-addr = <0 0>;
-		next-level-cache = <&l2_cache_p0_5>;
-	};
 };
 
 /*
