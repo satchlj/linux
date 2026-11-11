@@ -672,7 +672,7 @@
 
 
 	/* Die 0 MMIO */
-	soc@200000000 {
+	die0: soc@200000000 {
 		compatible = "simple-bus";
 		#address-cells = <2>;
 		#size-cells = <2>;
