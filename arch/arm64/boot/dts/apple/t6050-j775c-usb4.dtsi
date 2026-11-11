@@ -293,7 +293,7 @@
 		#mbox-cells = <0>;
 	};
 
-	acio0: cio@2a1ac0000 {
+	acio0: acio@2a1ac0000 {
 		compatible = "apple,t6050-usb4-acio";
 		reg = <0x2 0xa1ac0000 0x0 0xc000>,
 		      <0x2 0xa1080000 0x0 0x26000>,
@@ -442,7 +442,7 @@
 		#mbox-cells = <0>;
 	};
 
-	acio1: cio@2a9ac0000 {
+	acio1: acio@2a9ac0000 {
 		compatible = "apple,t6050-usb4-acio";
 		reg = <0x2 0xa9ac0000 0x0 0xc000>,
 		      <0x2 0xa9080000 0x0 0x26000>,
@@ -591,7 +591,7 @@
 		#mbox-cells = <0>;
 	};
 
-	acio2: cio@381ac0000 {
+	acio2: acio@381ac0000 {
 		compatible = "apple,t6050-usb4-acio";
 		reg = <0x3 0x81ac0000 0x0 0xc000>,
 		      <0x3 0x81080000 0x0 0x26000>,
@@ -740,7 +740,7 @@
 		#mbox-cells = <0>;
 	};
 
-	acio3: cio@389ac0000 {
+	acio3: acio@389ac0000 {
 		compatible = "apple,t6050-usb4-acio";
 		reg = <0x3 0x89ac0000 0x0 0xc000>,
 		      <0x3 0x89080000 0x0 0x26000>,
