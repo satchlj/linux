@@ -28,6 +28,7 @@
 /dts-v1/;
 
 #include "t6050-j775c-legacy.dtsi"
+#include "t6050-j775c-rebased-peripherals.dtsi"
 
 /delete-node/ &cpu18;
 /delete-node/ &cpu19;
@@ -850,34 +851,6 @@
  * behind them enumerate within a second (lobata, 2026-11-04), so the reset is active low.
  */
 &{/soc@200000000} {
-	pinctrl_nub: pinctrl@2881e4000 {
-		compatible = "apple,t6050-pinctrl", "apple,t8103-pinctrl";
-		reg = <0x2 0x881e4000 0x0 0x4000>;
-		gpio-controller;
-		#gpio-cells = <2>;
-		gpio-ranges = <&pinctrl_nub 0 0 61>;
-		apple,npins = <61>;
-		gpio-reserved-ranges = <0 14>, <15 46>;
-		gpio-line-names = "", "", "", "", "", "", "", "", "", "", "", "", "", "",
-				  "usb3hub_rst";
-		interrupt-controller;
-		#interrupt-cells = <2>;
-		interrupt-parent = <&aic>;
-		interrupts = <AIC_IRQ 0 706 IRQ_TYPE_LEVEL_HIGH>,
-			     <AIC_IRQ 0 708 IRQ_TYPE_LEVEL_HIGH>,
-			     <AIC_IRQ 0 710 IRQ_TYPE_LEVEL_HIGH>,
-			     <AIC_IRQ 0 712 IRQ_TYPE_LEVEL_HIGH>,
-			     <AIC_IRQ 0 714 IRQ_TYPE_LEVEL_HIGH>,
-			     <AIC_IRQ 0 716 IRQ_TYPE_LEVEL_HIGH>,
-			     <AIC_IRQ 0 718 IRQ_TYPE_LEVEL_HIGH>;
-
-		usb3hub-rst-hog {
-			gpio-hog;
-			gpios = <14 GPIO_ACTIVE_LOW>;
-			output-low;
-			line-name = "usb3hub_rst";
-		};
-	};
 };
 
 /*
@@ -927,97 +900,10 @@
  * dart_dispext1 to the display subsystem.
  */
 &{/soc@200000000} {
-	dart_dcpext1: iommu@392340000 {
-		compatible = "apple,t6050-dart", "apple,t8110-dart";
-		reg = <0x3 0x92340000 0x0 0x20000>;
-		/* dart-dcpext1 and dart-dispext1 share ADT interrupt 1142 */
-		interrupts = <AIC_IRQ 0 1142 IRQ_TYPE_LEVEL_HIGH>;
-		#iommu-cells = <1>;
-		/* ADT vm-base 1 TiB, vm-size 3 TiB */
-		apple,dma-range = <0x100 0x0 0x300 0x0>;
-		status = "disabled";
-	};
 
-	dart_dispext1: iommu@392300000 {
-		compatible = "apple,t6050-dart", "apple,t8110-dart";
-		/* reg[0] only, as for dart-dispext0 */
-		reg = <0x3 0x92300000 0x0 0xc000>;
-		interrupts = <AIC_IRQ 0 1142 IRQ_TYPE_LEVEL_HIGH>;
-		#iommu-cells = <1>;
-		apple,dma-range = <0x100 0x0 0x300 0x0>;
-		status = "disabled";
-	};
 
-	dcpext1_mbox: mailbox@392e08000 {
-		compatible = "apple,t6050-asc-mailbox", "apple,asc-mailbox-v4";
-		reg = <0x3 0x92e08000 0x0 0x4000>;
-		interrupts = <AIC_IRQ 0 1195 IRQ_TYPE_LEVEL_HIGH>,
-			     <AIC_IRQ 0 1196 IRQ_TYPE_LEVEL_HIGH>,
-			     <AIC_IRQ 0 1197 IRQ_TYPE_LEVEL_HIGH>,
-			     <AIC_IRQ 0 1198 IRQ_TYPE_LEVEL_HIGH>;
-		interrupt-names = "send-empty", "send-not-empty",
-				  "recv-empty", "recv-not-empty";
-		#mbox-cells = <0>;
-		status = "disabled";
-	};
 
-	dcpext1: dcp@392e00000 {
-		compatible = "apple,t6050-dcpext", "apple,dcpext";
-		reg = <0x3 0x92e00000 0x0 0x4000>,
-		      <0x3 0x90000000 0x0 0x4000000>,
-		      <0x3 0x92240000 0x0 0x10000>,
-		      <0x3 0x923ac000 0x0 0x4000>,
-		      <0x3 0x92800000 0x0 0x800000>,
-		      <0x2 0x86700000 0x0 0x114000>,
-		      <0x3 0x92850000 0x0 0x4000>;
-		reg-names = "coproc", "disp-0", "disp-1", "disp-2", "disp-3", "disp-4", "iop-vbar";
-		mboxes = <&dcpext1_mbox>;
-		mbox-names = "mbox";
-		iommus = <&dart_dcpext1 23>;
-		/* The PMC metadata is die 0's one block, dcpext0_pmc; DISP_EXT1's slot in it */
-		apple,bw-scratch = <&dcpext0_pmc 0 5 0x30000>;
-		/* The ADT external-index (iop-dcpext1-nub), as dcpext0's 1 */
-		apple,dcp-index = <2>;
-		apple,clock-ids;
-		apple,connector-type = "HDMI-A";
-		apple,dptx-die = <0>;
-		apple,dptx-phy = <4>;
-		/*
-		 * The fixed HDMI route: the PHY (its source select picks this engine), the
-		 * converter's hotplug output (AOP GPIO 14, active high) and its two power
-		 * enables (the SMC's pcIO lines).
-		 */
-		phys = <&lpdptx_phy0>;
-		phy-names = "dp-phy";
-		hdmi-hpd-gpios = <&pinctrl_aop 14 GPIO_ACTIVE_HIGH>;
-		hdmi-pwren-gpios = <&smc_pcio 0 GPIO_ACTIVE_HIGH>;
-		dp2hdmi-pwren-gpios = <&smc_pcio 1 GPIO_ACTIVE_HIGH>;
-		status = "disabled";
 
-		piodma {
-			iommus = <&dart_dispext1 16>;
-		};
-	};
-
-	lpdptx_phy0: phy@29c200000 {
-		compatible = "apple,t6050-dptx-phy";
-		reg = <0x2 0x9c200000 0x0 0x4000>,
-		      <0x2 0x9c240000 0x0 0x10000>;
-		reg-names = "core", "dptx";
-		power-domains = <&ps_dptx_phy>;
-		#phy-cells = <0>;
-		#reset-cells = <0>;
-		apple,pll-dcocfg = <3>;
-		apple,pll-dtcvreg = <15>;
-		apple,pll-dtccal = <2>;
-		apple,pll-dcdadj = <16>;
-		apple,pll-dlfcfg = <3>;
-		apple,pclkdrv-select = <1>;
-		/* dcpext1's route: the crossbar's ufp endpoint 1 (source select 2) */
-		apple,ufp-endpoint = <1>;
-		/* Aura enables it with dcpext1. */
-		status = "disabled";
-	};
 };
 
 /* The HDMI PHY's power gate (ADT pmgr DPTX_PHY, 0xe5); with no consumer it stays off */
@@ -1064,28 +950,7 @@
  * the PCM's open.
  */
 &{/soc@200000000} {
-	dart_dispext1_isoc: iommu@392180000 {
-		compatible = "apple,t6050-dart", "apple,t8110-dart";
-		reg = <0x3 0x92180000 0x0 0x20000>;
-		interrupts = <AIC_IRQ 0 1165 IRQ_TYPE_LEVEL_HIGH>;
-		#iommu-cells = <1>;
-		power-domains = <&ps_dispext1_adma>;
-		/* ADT vm-base 1 TiB, vm-size 64 GiB */
-		apple,dma-range = <0x100 0x0 0x10 0x0>;
-	};
 
-	admac_dispext1: dma-controller@392140000 {
-		compatible = "apple,t6050-admac", "apple,t8140-admac";
-		reg = <0x3 0x92140000 0x0 0x24000>;
-		/* One TX channel: Linux channel 0 */
-		dma-channels = <1>;
-		interrupts-extended = <&aic AIC_IRQ 0 1164 IRQ_TYPE_LEVEL_HIGH>,
-				      <0>, <0>, <0>;
-		#dma-cells = <1>;
-		iommus = <&dart_dispext1_isoc 30>;
-		power-domains = <&ps_dispext1_adma>;
-		apple,dma-range = <0x100 0x0 0x10 0x0>;
-	};
 };
 
 &pmgr0 {
@@ -1141,26 +1006,7 @@
  * parent DISPEXT0_SYS).
  */
 &{/soc@200000000} {
-	dart_dispext0_isoc: iommu@2b2180000 {
-		compatible = "apple,t6050-dart", "apple,t8110-dart";
-		reg = <0x2 0xb2180000 0x0 0x20000>;
-		interrupts = <AIC_IRQ 0 1093 IRQ_TYPE_LEVEL_HIGH>;
-		#iommu-cells = <1>;
-		power-domains = <&ps_dispext0_adma>;
-		apple,dma-range = <0x100 0x0 0x10 0x0>;
-	};
 
-	admac_dispext0: dma-controller@2b2140000 {
-		compatible = "apple,t6050-admac", "apple,t8140-admac";
-		reg = <0x2 0xb2140000 0x0 0x24000>;
-		dma-channels = <1>;
-		interrupts-extended = <&aic AIC_IRQ 0 1092 IRQ_TYPE_LEVEL_HIGH>,
-				      <0>, <0>, <0>;
-		#dma-cells = <1>;
-		iommus = <&dart_dispext0_isoc 30>;
-		power-domains = <&ps_dispext0_adma>;
-		apple,dma-range = <0x100 0x0 0x10 0x0>;
-	};
 };
 
 &pmgr0 {
@@ -1211,13 +1057,6 @@
 
 /* The untrained port's DART must not be probed; Aura enables it after link-up. */
 &{/soc@200000000} {
-	dart_apcie1: iommu@411000000 {
-		compatible = "apple,t6050-dart", "apple,t8110-dart";
-		reg = <0x4 0x11000000 0x0 0x20000>;
-		interrupts = <AIC_IRQ 0 1532 IRQ_TYPE_LEVEL_HIGH>;
-		#iommu-cells = <1>;
-		status = "disabled";
-	};
 };
 
 #include "t6050-j775c-usb4.dtsi"

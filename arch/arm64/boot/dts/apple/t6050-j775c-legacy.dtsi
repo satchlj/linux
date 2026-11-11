@@ -1365,31 +1365,10 @@
 		};
 
 		/* /arm-io/atc0-dpxbar */
-		atc0_xbar: mux@2a324c000 {
-			compatible = "apple,t6050-display-crossbar", "apple,t8142-display-crossbar";
-			reg = <0x2 0xa324c000 0x0 0x4000>;
-			#mux-control-cells = <1>;
-			power-domains = <&ps_atc0_usb_aon>, <&ps_atc0_common>;
-			power-domain-names = "usb-aon", "common";
-		};
 
 		/* /arm-io/atc1-dpxbar */
-		atc1_xbar: mux@2ab24c000 {
-			compatible = "apple,t6050-display-crossbar", "apple,t8142-display-crossbar";
-			reg = <0x2 0xab24c000 0x0 0x4000>;
-			#mux-control-cells = <1>;
-			power-domains = <&ps_atc1_usb_aon>, <&ps_atc1_common>;
-			power-domain-names = "usb-aon", "common";
-		};
 
 		/* /arm-io/atc3-dpxbar */
-		atc3_xbar: mux@38b24c000 {
-			compatible = "apple,t6050-display-crossbar", "apple,t8142-display-crossbar";
-			reg = <0x3 0x8b24c000 0x0 0x4000>;
-			#mux-control-cells = <1>;
-			power-domains = <&ps_atc3_usb_aon>, <&ps_atc3_common>;
-			power-domain-names = "usb-aon", "common";
-		};
 
 		/* /arm-io/atc2-dpxbar */
 		atc2_xbar: mux@38324c000 {
@@ -1638,58 +1617,9 @@
 		 * tunables are its ADT tables (DRD_USB31_GBL_DEFAULT with GCTL.PWRDNSCALE = 0xd, as on
 		 * T6040; GBL_HOST, DBG, CFG_HOST, LINK_REGS, CIO_REGS); PIPE_HANDLER goes to the PHY.
 		 */
-		usb_drd0: usb@2a2280000 {
-			compatible = "apple,t6050-dwc3", "apple,t8103-dwc3";
-			reg = <0x2 0xa2280000 0x0 0xcd00>,
-			      <0x2 0xa228cd00 0x0 0x4b00>,
-			      <0x2 0xa2200000 0x0 0x4000>;
-			reg-names = "dwc3-core", "dwc3-apple", "drd-cfg";
-			interrupts = <AIC_IRQ 0 1419 IRQ_TYPE_LEVEL_HIGH>;
-			dr_mode = "otg";
-			usb-role-switch;
-			role-switch-default-mode = "host";
-			iommus = <&usb_drd0_dart_0 0>, <&usb_drd0_dart_1 1>;
-			power-domains = <&ps_atc0_usb>;
-			resets = <&atc0_phy 0>;
-			phys = <&atc0_phy PHY_TYPE_USB2>, <&atc0_phy PHY_TYPE_USB3>;
-			phy-names = "usb2-phy", "usb3-phy";
-			apple,tunable-gbl-default = <0x64 0x2 0x0>, <0x10 0xfff80000 0x00680000>;
-			apple,tunable-gbl-host = <0x4 0x0001ef00 0x00002f00>, <0x1c 0x00000100 0x0>,
-				<0x2c 0x000a07ff 0x000800c8>, <0x100 0x02000100 0x02000100>,
-				<0x504 0x00001000 0x0>, <0x528 0xff0000ff 0x06000006>,
-				<0x52c 0xff0000ff 0x08000008>, <0x580 0xffffffff 0x6f000006>,
-				<0x584 0xffffffff 0x00060000>;
-			apple,tunable-dbg = <0x0 0x8 0x8>;
-			apple,tunable-cfg-host = <0x20 0xff 0x1b>;
-			apple,tunable-link = <0x10 0xff000000 0xff000000>, <0x20 0x7ff00000 0x4e900000>,
-				<0x24 0x001f8000 0x000b8000>, <0x60 0x0003ffff 0x00000600>;
-			apple,tunable-cio = <0x20 0x00ff0000 0x001e0000>;
-
-			port {
-				usb_drd0_hs: endpoint {
-					remote-endpoint = <&hpm0_hs>;
-				};
-			};
-		};
 
 		/* /arm-io/dart-usb0 reg[0] and reg[1], interrupt 1423; vm-base 0x10000004000 +0xffff0000 */
-		usb_drd0_dart_0: iommu@2a2f00000 {
-			compatible = "apple,t6050-dart", "apple,t8110-dart";
-			reg = <0x2 0xa2f00000 0x0 0xc000>;
-			interrupts = <AIC_IRQ 0 1423 IRQ_TYPE_LEVEL_HIGH>;
-			power-domains = <&ps_atc0_usb>;
-			#iommu-cells = <1>;
-			apple,dma-range = <0x100 0x4000 0x0 0xffff0000>;
-		};
 
-		usb_drd0_dart_1: iommu@2a2f80000 {
-			compatible = "apple,t6050-dart", "apple,t8110-dart";
-			reg = <0x2 0xa2f80000 0x0 0xc000>;
-			interrupts = <AIC_IRQ 0 1423 IRQ_TYPE_LEVEL_HIGH>;
-			power-domains = <&ps_atc0_usb>;
-			#iommu-cells = <1>;
-			apple,dma-range = <0x100 0x4000 0x0 0xffff0000>;
-		};
 
 		/* /arm-io/acio-phy-cpu1 reg[0]: the PHY firmware's mailbox */
 		atc1_phy_mbox: mailbox@2ab148000 {
@@ -2133,42 +2063,8 @@
 		 * sid-count 16, vm-base 1 TiB + 3 TiB). The engine and the DARTs sit
 		 * behind ANE_SYS: any access while it is off stalls the bus.
 		 */
-		ane_dart0: iommu@509800000 {
-			compatible = "apple,t6050-ane-dart", "apple,t6050-dart",
-				     "apple,t8110-dart";
-			reg = <0x5 0x09800000 0x0 0xc000>;
-			#iommu-cells = <1>;
-			interrupt-parent = <&aic>;
-			interrupts = <AIC_IRQ 0 955 IRQ_TYPE_LEVEL_HIGH>;
-			power-domains = <&ps_ane_sys>;
-			/* The firmware DVAs reach 0x100_xxxx_xxxx. */
-			apple,dma-range = <0x0 0x0 0x400 0x0>;
-			status = "disabled";
-		};
 
-		ane_dart1: iommu@509820000 {
-			compatible = "apple,t6050-ane-dart", "apple,t6050-dart",
-				     "apple,t8110-dart";
-			reg = <0x5 0x09820000 0x0 0xc000>;
-			#iommu-cells = <1>;
-			interrupt-parent = <&aic>;
-			interrupts = <AIC_IRQ 0 955 IRQ_TYPE_LEVEL_HIGH>;
-			power-domains = <&ps_ane_sys>;
-			apple,dma-range = <0x0 0x0 0x400 0x0>;
-			status = "disabled";
-		};
 
-		ane_dart2: iommu@509840000 {
-			compatible = "apple,t6050-ane-dart", "apple,t6050-dart",
-				     "apple,t8110-dart";
-			reg = <0x5 0x09840000 0x0 0xc000>;
-			#iommu-cells = <1>;
-			interrupt-parent = <&aic>;
-			interrupts = <AIC_IRQ 0 955 IRQ_TYPE_LEVEL_HIGH>;
-			power-domains = <&ps_ane_sys>;
-			apple,dma-range = <0x0 0x0 0x400 0x0>;
-			status = "disabled";
-		};
 
 		/*
 		 * reg: the ADT engine window, the pmgr bank the ANE's power states
@@ -2549,42 +2445,6 @@
 		nonposted-mmio;
 
 		/* ADT pmgr reg 51; GPX and AFR are critical there (always-on), GFX's parents are both. */
-		pmgr3: power-management@2300e80000 {
-			compatible = "apple,t6050-pmgr", "apple,t8103-pmgr", "syscon", "simple-mfd";
-			reg = <0x23 0x00e80000 0x0 0x4000>;
-			#address-cells = <1>;
-			#size-cells = <1>;
-
-			ps_gpx: power-controller@0 {
-				compatible = "apple,t6050-pmgr-pwrstate", "apple,t8103-pmgr-pwrstate";
-				reg = <0x0 4>;
-				label = "gpx";
-				#power-domain-cells = <0>;
-				#reset-cells = <0>;
-				apple,always-on;
-				status = "disabled";
-			};
-
-			ps_afr: power-controller@100 {
-				compatible = "apple,t6050-pmgr-pwrstate", "apple,t8103-pmgr-pwrstate";
-				reg = <0x100 4>;
-				label = "afr";
-				#power-domain-cells = <0>;
-				#reset-cells = <0>;
-				apple,always-on;
-				status = "disabled";
-			};
-
-			ps_gfx: power-controller@110 {
-				compatible = "apple,t6050-pmgr-pwrstate", "apple,t8103-pmgr-pwrstate";
-				reg = <0x110 4>;
-				label = "gfx";
-				#power-domain-cells = <0>;
-				power-domains = <&ps_afr>, <&ps_gpx>;
-				#reset-cells = <0>;
-				status = "disabled";
-			};
-		};
 
 		gpu: gpu@2302600000 {
 			compatible = "apple,agx-g17c", "apple,agx-g17s";
