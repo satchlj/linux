@@ -2951,27 +2951,42 @@ static int cd321x_remove(struct tps6598x *tps)
 	return 0;
 }
 
-static int cd321x_reset_inherited_connection(struct tps6598x *tps, u32 *status)
+static int cd321x_reset_inherited_connection(struct tps6598x *tps, u32 *status,
+					     bool recovery)
 {
-	/* J716c's port-controller key is the reversed target identifier J716. */
-	static const u8 key[] = { '6', '1', '7', 'J' };
+	static const struct {
+		const char *compatible;
+		u8 key[4];
+	} keys[] = {
+		{ "apple,j716c", { '6', '1', '7', 'J' } },
+		{ "apple,j775c", { '5', '7', '7', 'J' } },
+	};
+	const u8 *key = NULL;
+	unsigned int i;
 	static const u8 locked[4];
 	u8 delay = 5, result;
 	unsigned long timeout;
 	int ret, lock_ret, mode;
+	u32 cmd;
 
-	if (!device_property_read_bool(tps->dev, "apple,reset-inherited-usb2-connection") ||
-	    !of_machine_is_compatible("apple,j716c") ||
+	for (i = 0; i < ARRAY_SIZE(keys); i++)
+		if (of_machine_is_compatible(keys[i].compatible)) {
+			key = keys[i].key;
+			break;
+		}
+	if (!key ||
+	    (!recovery && !device_property_read_bool(tps->dev,
+					     "apple,reset-inherited-usb2-connection")) ||
 	    !device_is_compatible(tps->dev, "apple,sn201202x") ||
 	    tps->dbma_at_probe || !(*status & TPS_STATUS_PLUG_PRESENT) ||
-	    !TPS_STATUS_TO_TYPEC_DATAROLE(*status))
+	    (!recovery && !TPS_STATUS_TO_TYPEC_DATAROLE(*status)))
 		return 0;
 	mode = tps6598x_check_mode(tps);
 	if (mode != TPS_MODE_APP && mode != TPS_MODE_APP1)
 		return 0;
 
 	/* All suppliers are available, but no USB or router session has started. */
-	ret = tps6598x_exec_cmd(tps, "LOCK", sizeof(key), key, sizeof(result), &result);
+	ret = tps6598x_exec_cmd(tps, "LOCK", 4, key, sizeof(result), &result);
 	if (ret)
 		return ret;
 	if (result) {
@@ -2999,15 +3014,25 @@ static int cd321x_reset_inherited_connection(struct tps6598x *tps, u32 *status)
 			ret = mode < 0 ? mode : -ETIMEDOUT;
 	}
 relock:
-	/* CC/PD negotiation may still be finishing when application mode returns. */
-	lock_ret = tps6598x_exec_cmd_tmo(tps, "LOCK", sizeof(locked), locked, 0, NULL,
-				       5000, 0);
+	/* Probe retains its original command budget and ordering. */
+	timeout = jiffies + msecs_to_jiffies(15000);
+	do {
+		lock_ret = tps6598x_exec_cmd_tmo(tps, "LOCK", sizeof(locked), locked,
+					       0, NULL, recovery ? 10000 : 5000, 0);
+		if (!recovery || !lock_ret || time_after_eq(jiffies, timeout))
+			break;
+		/* A timed-out task may still own CMD1: never overwrite it. */
+		if (tps6598x_read32(tps, TPS_REG_CMD1, &cmd) || cmd)
+			break;
+		msleep(100);
+	} while (time_before(jiffies, timeout));
 	if (ret || lock_ret)
 		return ret ?: lock_ret;
 	if (!tps6598x_read_status(tps, status))
 		return -EIO;
 	tps->status = *status;
-	dev_info(tps->dev, "reinitialized inherited USB2 connection\n");
+	dev_info(tps->dev, "%s\n", recovery ? "PD recovery: DISC and relock complete" :
+		 "reinitialized inherited USB2 connection");
 	return 0;
 }
 
@@ -3124,7 +3149,7 @@ int tipd_init(struct tps6598x *tps)
 		}
 	}
 
-	ret = cd321x_reset_inherited_connection(tps, &status);
+	ret = cd321x_reset_inherited_connection(tps, &status, false);
 	if (ret)
 		goto err_disconnect;
 
