@@ -1070,3 +1070,9 @@
 
 /* Match the ported board's rear port 3 PD activation. */
 &hpm2 { status = "okay"; };
+
+/* Activate ATC2 domain providers as a separate migration step. */
+&ps_atc2_common { status = "okay"; };
+&ps_atc2_usb_aon { status = "okay"; };
+&ps_atc2_phymxwrap { status = "okay"; };
+&ps_atc2_usb { status = "okay"; };
