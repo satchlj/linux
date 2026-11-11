@@ -1067,3 +1067,6 @@
 &atc2_phy_mbox { status = "okay"; };
 &atc2_phy { status = "okay"; };
 &atc2_xbar { status = "okay"; };
+
+/* Match the ported board's rear port 3 PD activation. */
+&hpm2 { status = "okay"; };
