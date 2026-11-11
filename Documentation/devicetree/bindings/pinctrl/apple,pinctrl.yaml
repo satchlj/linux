@@ -87,6 +87,10 @@ properties:
     maxItems: 1
 
 patternProperties:
+  "-hog$":
+    type: object
+    $ref: /schemas/gpio/gpio-hog.yaml#
+
   '-pins$':
     type: object
     $ref: pinmux-node.yaml#
