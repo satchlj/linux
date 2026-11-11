@@ -1213,6 +1213,7 @@ static void cd321x_update_work(struct work_struct *work)
 		ret = usb_role_switch_set_role(tps->role_sw, USB_ROLE_NONE);
 		if (ret)
 			goto retry;
+		dev_dbg(tps->dev, "USB4 teardown: USB role NONE\n");
 	}
 
 	/* Process partner disconnection or change */
@@ -1237,6 +1238,8 @@ static void cd321x_update_work(struct work_struct *work)
 		cd321x->state.data = NULL;
 		/* Through cd321x->mux, which can then tell if SAFE was held up */
 		ret = cd321x_mux_set(cd321x, &held);
+		if (!ret)
+			dev_dbg(tps->dev, "USB4 teardown: SAFE complete\n");
 		cd321x->state_valid = !ret;
 		if (ret) {
 			if (cd321x_mux_still_held(cd321x, held))
