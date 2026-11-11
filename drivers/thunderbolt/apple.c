@@ -3350,7 +3350,8 @@ static int apple_cio_start(struct apple_cio *acio)
 	acio->current_cable_info = acio->target_cable_info;
 	acio->start_gen++;
 	/* A new NHI may never report a peer: keep the one existing watch alive. */
-	if (acio->hw == &apple_cio_t6050_hw &&
+	if (of_machine_is_compatible("apple,j775c") &&
+	    acio->hw == &apple_cio_t6050_hw &&
 	    acio->link_lost_cycles < APPLE_CIO_LINK_LOST_CYCLES) {
 		WRITE_ONCE(acio->link_lost_gen, acio->start_gen);
 		mod_delayed_work(system_freezable_wq, &acio->link_lost_work,
@@ -3508,7 +3509,8 @@ static void apple_cio_link_lost_work(struct work_struct *work)
 			return;
 		}
 		escalate = apple_cio_recovery_action(acio->link_lost_cycles, false,
-						 false, acio->hw == &apple_cio_t6050_hw) == 2;
+						 false,
+						 of_machine_is_compatible("apple,j775c")) == 2;
 		acio->link_lost_cycles++;
 		WRITE_ONCE(acio->link_lost_cycle_activity, activity);
 		acio->link_lost_restart = true;

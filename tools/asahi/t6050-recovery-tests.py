@@ -8,8 +8,8 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
 s = (ROOT / 'drivers/usb/typec/tipd/core.c').read_text()
-f = s[s.index('static int cd321x_reset_inherited_connection('):]
-f = f[:f.index('\n}\n') + 3]
+f = s[s.index('struct cd321x_disc_key {'):]
+f = f[:f.index('\n}\n', f.index('static int cd321x_reset_inherited_connection(')) + 3]
 base = r'''
 #include <stdbool.h>
 #include <stdint.h>
@@ -74,7 +74,7 @@ int main(void) {
   board=boards[b]; property=prop; t.dbma_at_probe=dbma;
   commands=reads=unlocks=disconnects=relocks=0; jiffies=0;
   assert(cd321x_reset_inherited_connection(&t,&status,recovery)==0);
-  bool expected=b<2 && (recovery || prop) && !dbma && connected && (recovery || host);
+  bool expected=b<2 && (!recovery || b==1) && (recovery || prop) && !dbma && connected && (recovery || host);
   assert(commands==(expected ? 3:0));
   if (expected) assert(unlocks==1 && disconnects==1 && relocks==1 && reads==1 && jiffies==5100);
   cases++;
@@ -88,20 +88,58 @@ int main(void) {
  for (unsigned int a=0;a<4;a++) for (unsigned int p=0;p<4;p++) {
   assert(apple_cio_recovery_progress(a,p)==(a && a!=p)); cases++;
  }
+ for (unsigned int n=0;n<3;n++) {
+  /* Peer appears after cycle N was admitted, before PD executes DISC. */
+  assert(apple_cio_recovery_action(n,false,true,true)==0);
+  cases++;
+ }
+ board="apple,j716c"; assert(!cd321x_disc_recovery_enabled()); cases++;
+ board="apple,j775c"; assert(cd321x_disc_recovery_enabled()); cases++;
  printf("PASS %u cases\n",cases);
 }
 '''
 header = (ROOT / 'drivers/thunderbolt/apple-recovery.h').read_text()
+router = (ROOT / 'drivers/thunderbolt/apple.c').read_text()
+check = router[router.index('\tif (data->state == TYPEC_THUNDERBOLT_SWITCH_CHECK_RECOVERY) {'):]
+check = check[:check.index('\n\tswitch (data->state)')]
+late = r'''
+typedef uint64_t u64;
+#define APPLE_CIO_SLEEP_OPEN 0
+#define TYPEC_THUNDERBOLT_SWITCH_CHECK_RECOVERY 9
+struct apple_cio { bool removing, recovering, sleep_restart_owed;
+ int sleep_phase, current_cable_info, target_cable_info; bool peer; };
+struct check_data { int state; };
+static bool apple_cio_recovering(struct apple_cio *a) { return a->recovering; }
+static bool apple_cio_has_peer(struct apple_cio *a, u64 *activity) { return a->peer; }
+static int check_peer(struct apple_cio *acio, struct check_data *data) {
+''' + check + r'''
+ return -EINVAL;
+}
+static void late_peer_cases(void) {
+ struct apple_cio a = {.current_cable_info=1, .target_cable_info=1};
+ struct check_data d = {TYPEC_THUNDERBOLT_SWITCH_CHECK_RECOVERY};
+ for (unsigned int n=0;n<3;n++) {
+  a.peer=false;
+  assert(apple_cio_recovery_action(n,false,false,true)==(n ? 2:1));
+  assert(check_peer(&a,&d)==-ENOLINK);
+  /* PD work was queued; the peer arrives before the final live check. */
+  a.peer=true;
+  assert(check_peer(&a,&d)==0);
+ }
+ puts("PASS 3 production late-peer recheck cases");
+}
+'''
+main = main.replace(' struct tps6598x t={0};', ' late_peer_cases();\n struct tps6598x t={0};')
 with tempfile.TemporaryDirectory(prefix='t6050-recovery-') as d:
     src = Path(d) / 'test.c'
     binary = Path(d) / 'test'
-    src.write_text(base + header + f + main)
+    src.write_text(base + header + f + late + main)
     subprocess.run([os.environ.get('HOSTCC', 'cc'), '-std=gnu11', '-O2',
                     str(src), '-o', str(binary)], check=True)
     subprocess.run([str(binary)], check=True)
     for bad in [f.replace("'6', '1', '7', 'J'", "'5', '7', '7', 'J'"),
                 f.replace('!key ||', 'false ||')]:
-        src.write_text(base + header + bad + main)
+        src.write_text(base + header + bad + late + main)
         subprocess.run([os.environ.get('HOSTCC', 'cc'), '-std=gnu11', '-O2',
                         str(src), '-o', str(binary)], check=True)
         assert subprocess.run([str(binary)], stdout=subprocess.DEVNULL,

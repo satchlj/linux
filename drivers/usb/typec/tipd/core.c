@@ -1519,29 +1519,47 @@ static int cd321x_check_setup(struct cd321x *cd321x, u64 event);
 
 static int tps6598x_check_mode(struct tps6598x *tps);
 
+struct cd321x_disc_key {
+	const char *compatible;
+	u8 key[4];
+	bool recovery;
+};
+
+static const struct cd321x_disc_key cd321x_disc_keys[] = {
+	{ "apple,j716c", { '6', '1', '7', 'J' }, false },
+	{ "apple,j775c", { '5', '7', '7', 'J' }, true },
+};
+
+static const struct cd321x_disc_key *cd321x_disc_key(void)
+{
+	unsigned int i;
+
+	for (i = 0; i < ARRAY_SIZE(cd321x_disc_keys); i++)
+		if (of_machine_is_compatible(cd321x_disc_keys[i].compatible))
+			return &cd321x_disc_keys[i];
+	return NULL;
+}
+
+static bool cd321x_disc_recovery_enabled(void)
+{
+	const struct cd321x_disc_key *key = cd321x_disc_key();
+
+	return key && key->recovery;
+}
+
 static int cd321x_reset_inherited_connection(struct tps6598x *tps, u32 *status,
 					     bool recovery)
 {
-	static const struct {
-		const char *compatible;
-		u8 key[4];
-	} keys[] = {
-		{ "apple,j716c", { '6', '1', '7', 'J' } },
-		{ "apple,j775c", { '5', '7', '7', 'J' } },
-	};
+	const struct cd321x_disc_key *match = cd321x_disc_key();
 	const u8 *key = NULL;
-	unsigned int i;
 	static const u8 locked[4];
 	u8 delay = 5, result;
 	unsigned long timeout;
 	int ret, lock_ret, mode;
 	u32 cmd;
 
-	for (i = 0; i < ARRAY_SIZE(keys); i++)
-		if (of_machine_is_compatible(keys[i].compatible)) {
-			key = keys[i].key;
-			break;
-		}
+	if (match && (!recovery || match->recovery))
+		key = match->key;
 	if (!key ||
 	    (!recovery && !device_property_read_bool(tps->dev,
 					     "apple,reset-inherited-usb2-connection")) ||
@@ -1666,7 +1684,8 @@ static void cd321x_resume_work(struct work_struct *work)
 			goto retry;
 	}
 
-	if (escalate && (notes & CD321X_PM_FAULT_ACCEPTED) &&
+	if (escalate && cd321x_disc_recovery_enabled() &&
+	    (notes & CD321X_PM_FAULT_ACCEPTED) &&
 	    (status & TPS_STATUS_PLUG_PRESENT)) {
 		struct typec_thunderbolt_switch_data recovery = {
 			.state = TYPEC_THUNDERBOLT_SWITCH_CHECK_RECOVERY,
