@@ -38,3 +38,13 @@ part B line is emitted inside SAFE, before SAFE completion. Domain lines repeat
 for each domain. First attach has no preceding teardown. Existing sleep policy
 remains opt-in (`thunderbolt_apple.s2idle_teardown=Y`); establish an unchanged daily
 baseline first. No hardware success is claimed for this branch.
+
+R3 checks only CIO PCIe/USB/AUSS leaf islands (supplier indices 1..3),
+not the CIO parent/DART supply or the independently reset PCIe-C host/DART
+supply. This is a router leaf reset boundary, not proof the whole shared
+complex is off. The CPU RUN bit is cleared and RTKit reinitialized separately;
+start still performs the PMGR reconfiguration handshake before wrapper access.
+A failed leaf-off is retried at start. The provider logs the failed domain.
+Run `python3 drivers/thunderbolt/test-pm-off.py` for shared-held/retry cases.
+Hardware confirmation that this boundary suffices on every T6050 board remains
+owed; no offline test establishes a silicon reset dependency.

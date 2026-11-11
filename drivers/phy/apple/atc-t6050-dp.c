@@ -203,7 +203,7 @@ static const struct apple_rtkit_ops atc_fw_ops = {
 
 static int atc_firmware(struct t6050_dp *dp, bool start)
 {
-	bool cio = dp->combo && (dp->pending_mode == COMBO_CIO || dp->cio_started);
+	bool idle_restart = of_machine_is_compatible("apple,j775c");
 	u32 status;
 	int ret = 0;
 
@@ -241,34 +241,29 @@ static int atc_firmware(struct t6050_dp *dp, bool start)
 		if (!ret)
 			dp->fw_running = true;
 	} else {
-		/* Failed/partial boot may already have acknowledged idle. */
-		status = readl(dp->banks[38] + 0x44);
-		if (dp->fw_running || !(status & BIT(1))) {
-			ret = apple_rtkit_send_message(dp->rtkit, 0x20, BIT_ULL(56), NULL, false);
+		/* Keep integration's shutdown protocol unless the board opts in. */
+		ret = apple_rtkit_send_message(dp->rtkit, 0x20, BIT_ULL(56), NULL, false);
+		if (!ret && idle_restart) {
+			ret = apple_rtkit_idle(dp->rtkit);
 			if (!ret)
-				ret = apple_rtkit_idle(dp->rtkit);
-		}
-		/* Never cut CIO power without the CPU's own idle acknowledgement. */
-		if (cio) {
-			int ack = readl_poll_timeout(dp->banks[38] + 0x44, status,
-						status & BIT(1), 1000, 10000);
-
-			if (ack)
-				return ack;
-			/* The ACK also permits recovery from a failed mailbox boot. */
-			ret = 0;
-		} else if (!ret && readl_poll_timeout(dp->banks[38] + 0x44, status,
-						   status & BIT(1), 1000, 10000)) {
-			dev_warn(dp->dev, "PHY CPU did not idle (W+0x44 %#x)\n", status);
+				ret = readl_poll_timeout(dp->banks[38] + 0x44, status,
+						 status & BIT(1), 1000, 10000);
+			/* An unmeasured idle deadline must not reject shutdown. */
+			if (ret)
+				ret = apple_rtkit_shutdown(dp->rtkit);
+		} else if (!ret) {
+			ret = apple_rtkit_shutdown(dp->rtkit);
 		}
 		if (!ret) {
 			writel((u32)~BIT(4), dp->banks[38] + 0x28);
 			dp->fw_cpu_started = false;
 			dp->fw_running = false;
-			dp->fw_reinit_pending = true;
-			ret = apple_rtkit_reinit(dp->rtkit);
-			if (!ret)
-				dp->fw_reinit_pending = false;
+			if (idle_restart) {
+				dp->fw_reinit_pending = true;
+				ret = apple_rtkit_reinit(dp->rtkit);
+				if (!ret)
+					dp->fw_reinit_pending = false;
+			}
 		}
 	}
 	if (ret)

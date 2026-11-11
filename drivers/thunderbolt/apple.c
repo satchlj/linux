@@ -3037,8 +3037,13 @@ static int apple_cio_power_off(struct apple_cio *acio)
 	}
 	if (!(acio->hw == &apple_cio_t6050_hw))
 		return 0;
-	/* A suspended virtual device alone does not certify a shared domain off. */
-	for (i = 0; i < acio->pd_list->num_pds; i++) {
+	/*
+	 * Only the three CIO leaf islands form the router reset boundary.
+	 * Index 0 (CIO parent) also supplies the DART; index 4 (PCIe-C)
+	 * supplies its host/DART and has a separate reset at start. Neither
+	 * must be off to reset the router's CIO PCIe/USB/AUSS islands.
+	 */
+	for (i = 1; i < min(acio->pd_list->num_pds, 4U); i++) {
 		ret = apple_pmgr_verify_off(acio->pd_list->pd_devs[i]);
 		if (ret && !error)
 			error = ret;

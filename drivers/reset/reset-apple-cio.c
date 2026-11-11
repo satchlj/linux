@@ -63,6 +63,7 @@
 #define APPLE_CIO_RESET_TIMEOUT_US 100000
 /* A t6050 reconfiguration takes a few ms; allow ample margin. */
 #define APPLE_CIO_RESET_T6050_TIMEOUT_US 192000
+#define APPLE_CIO_RESET_T6050_COMPLETE_US 10000000
 
 #define T8103_CIO_CTRL_STRIDE 0x4000
 #define T8103_CIO_CTRL_INIT_REQ BIT(0)
@@ -226,6 +227,14 @@ static int t6050_cio_deassert(struct apple_cio_reset *priv, unsigned long id)
 	if (ret)
 		return ret;
 
+	/* Observe request acceptance before accepting a clear register. */
+	ret = regmap_read_poll_timeout(priv->regmap, priv->variant->ctrl, val,
+				       val & T8142_CIO_CTRL_INIT_BUSY(id),
+				       APPLE_CIO_RESET_POLL_US,
+				       APPLE_CIO_RESET_T6050_TIMEOUT_US);
+	if (ret)
+		return ret;
+
 	/*
 	 * The CPU wrapper is usable only once the reconfiguration is over, when
 	 * the request and done bits clear again, a few ms later. An access
@@ -233,7 +242,7 @@ static int t6050_cio_deassert(struct apple_cio_reset *priv, unsigned long id)
 	 */
 	return regmap_read_poll_timeout(priv->regmap, priv->variant->ctrl, val,
 				       !(val & mask), APPLE_CIO_RESET_POLL_US,
-				       10000000);
+				       APPLE_CIO_RESET_T6050_COMPLETE_US);
 }
 
 /* The t8142 bit layout in a register mapped on its own, with a done flag. */

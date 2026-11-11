@@ -20,7 +20,6 @@
 #include <linux/reset-controller.h>
 #include <linux/module.h>
 #include <linux/soc/apple/pmgr-pwrstate.h>
-#include <linux/soc/apple/pmgr-pwrstate.h>
 #include <linux/soc/apple/t8132.h>
 
 #define APPLE_PMGR_RESET        BIT(31)
