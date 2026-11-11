@@ -1,0 +1,270 @@
+// SPDX-License-Identifier: GPL-2.0+ OR MIT
+/* J775c enablement on the shared disabled acioN inventory.
+ * Board tunables and DROMs retained from candidate44 J775c ADT.
+ */
+
+&{/aliases} {
+	usb4-0-acio = &acio0;
+	usb4-0-nhi = &acio0_nhi;
+	usb4-1-acio = &acio1;
+	usb4-1-nhi = &acio1_nhi;
+	usb4-2-acio = &acio2;
+	usb4-2-nhi = &acio2_nhi;
+	usb4-3-acio = &acio3;
+	usb4-3-nhi = &acio3_nhi;
+};
+
+
+&acio0_mbox { status = "okay"; };
+&acio0 {
+	status = "okay";
+	apple,tunable-pcie-adapter = <0x1008 0x6 0x6>;
+	apple,tunable-router-ap-fw = <0x8 0xff2 0x482>;
+	ports {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		port@1 {
+			reg = <1>;
+			acio0_tbt: endpoint { remote-endpoint = <&hpm0_usb4>; };
+		};
+	};
+};
+&hpm0 {
+	connector {
+		ports {
+			port@3 {
+				reg = <3>;
+				hpm0_usb4: endpoint { remote-endpoint = <&acio0_tbt>; };
+			};
+		};
+	};
+};
+&ps_atc0_cio { status = "okay"; };
+&ps_atc0_cio_pcie { status = "okay"; };
+&ps_atc0_cio_usb { status = "okay"; };
+&ps_atc0_cio_auss { status = "okay"; };
+&acio0_dart {
+	apple,tunable = <0x20c 0x80000121 0x80000121>,
+				<0x220 0xf0f 0xf0f>,
+				<0x224 0xffff 0x909>,
+				<0x300 0x1f31 0x1>,
+				<0x308 0x3ffffffc 0x10000000>,
+				<0x310 0x3ffffffc 0x3ffffffc>,
+				<0x800 0xf003f 0x10000>,
+				<0x804 0xf003f 0x10002>,
+				<0x808 0xf003f 0x10004>,
+				<0x80c 0xf003f 0x20006>,
+				<0x810 0xf003f 0x2000a>,
+				<0x814 0xf003f 0x2000e>,
+				<0x818 0xf003f 0x20012>,
+				<0x81c 0xf003f 0x20016>,
+				<0x820 0xf003f 0x2001a>,
+				<0x824 0xf003f 0x2001e>,
+				<0x828 0xf003f 0x20022>,
+				<0x82c 0xf003f 0x20026>,
+				<0x830 0xf003f 0x2002a>,
+				<0x834 0xf003f 0x2002e>,
+				<0x838 0xf003f 0x20032>,
+				<0x83c 0xf003f 0x10036>;
+};
+&acio0_nhi {
+	apple,thunderbolt-drom = [db 00 00 00 00 00 00 00 00 c0 49 a7 a6 00 5c 00 00 00 00 00 00 00 08 81 80 02 80 00 00 00 08 82 90 01 80 00 00 00 03 83 20 08 84 00 00 00 00 00 00 08 85 00 00 00 00 00 00 05 86 09 01 00 08 87 00 00 00 00 00 00 05 88 09 01 00 05 89 09 01 00 05 8a 09 01 00 0e 01 41 70 70 6c 65 2c 20 49 6e 63 2e 00 06 02 69 4f 53 00 00 00 00];
+};
+&atc0_phy {
+	apple,tunable-lane0-rx-top-cio = <0x35c 0xe00 0x200>;
+	apple,tunable-lane1-rx-top-cio = <0x35c 0xe00 0x200>;
+};
+
+&acio1_mbox { status = "okay"; };
+&acio1 {
+	status = "okay";
+	apple,tunable-pcie-adapter = <0x1008 0x6 0x6>;
+	apple,tunable-router-ap-fw = <0x8 0xff2 0x482>;
+	ports {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		port@1 {
+			reg = <1>;
+			acio1_tbt: endpoint { remote-endpoint = <&hpm1_usb4>; };
+		};
+	};
+};
+&hpm1 {
+	connector {
+		ports {
+			port@3 {
+				reg = <3>;
+				hpm1_usb4: endpoint { remote-endpoint = <&acio1_tbt>; };
+			};
+		};
+	};
+};
+&ps_atc1_cio { status = "okay"; };
+&ps_atc1_cio_pcie { status = "okay"; };
+&ps_atc1_cio_usb { status = "okay"; };
+&ps_atc1_cio_auss { status = "okay"; };
+&acio1_dart {
+	apple,tunable = <0x20c 0x80000121 0x80000121>,
+				<0x220 0xf0f 0xf0f>,
+				<0x224 0xffff 0x909>,
+				<0x300 0x1f31 0x1>,
+				<0x308 0x3ffffffc 0x10000000>,
+				<0x310 0x3ffffffc 0x3ffffffc>,
+				<0x800 0xf003f 0x10000>,
+				<0x804 0xf003f 0x10002>,
+				<0x808 0xf003f 0x10004>,
+				<0x80c 0xf003f 0x20006>,
+				<0x810 0xf003f 0x2000a>,
+				<0x814 0xf003f 0x2000e>,
+				<0x818 0xf003f 0x20012>,
+				<0x81c 0xf003f 0x20016>,
+				<0x820 0xf003f 0x2001a>,
+				<0x824 0xf003f 0x2001e>,
+				<0x828 0xf003f 0x20022>,
+				<0x82c 0xf003f 0x20026>,
+				<0x830 0xf003f 0x2002a>,
+				<0x834 0xf003f 0x2002e>,
+				<0x838 0xf003f 0x20032>,
+				<0x83c 0xf003f 0x10036>;
+};
+&acio1_nhi {
+	apple,thunderbolt-drom = [c8 01 00 00 00 00 00 00 00 e8 61 95 b3 00 5c 00 00 00 00 00 00 00 08 81 81 02 81 00 00 00 08 82 91 01 81 00 00 00 03 83 20 08 84 00 00 00 00 00 00 08 85 00 00 00 00 00 00 05 86 09 01 00 08 87 00 00 00 00 00 00 05 88 09 01 00 05 89 09 01 00 05 8a 09 01 00 0e 01 41 70 70 6c 65 2c 20 49 6e 63 2e 00 06 02 69 4f 53 00 00 00 00];
+};
+&atc1_phy {
+	apple,tunable-lane0-rx-top-cio = <0x35c 0xe00 0x200>;
+	apple,tunable-lane1-rx-top-cio = <0x35c 0xe00 0x200>;
+};
+
+&acio2_mbox { status = "okay"; };
+&acio2 {
+	status = "okay";
+	apple,tunable-pcie-adapter = <0x1008 0x6 0x6>;
+	apple,tunable-router-ap-fw = <0x8 0xff2 0x482>;
+	ports {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		port@1 {
+			reg = <1>;
+			acio2_tbt: endpoint { remote-endpoint = <&hpm2_usb4>; };
+		};
+	};
+};
+&hpm2 {
+	connector {
+		ports {
+			port@3 {
+				reg = <3>;
+				hpm2_usb4: endpoint { remote-endpoint = <&acio2_tbt>; };
+			};
+		};
+	};
+};
+&ps_atc2_cio { status = "okay"; };
+&ps_atc2_cio_pcie { status = "okay"; };
+&ps_atc2_cio_usb { status = "okay"; };
+&ps_atc2_cio_auss { status = "okay"; };
+&acio2_dart {
+	apple,tunable = <0x20c 0x80000121 0x80000121>,
+				<0x220 0xf0f 0xf0f>,
+				<0x224 0xffff 0x909>,
+				<0x300 0x1f31 0x1>,
+				<0x308 0x3ffffffc 0x10000000>,
+				<0x310 0x3ffffffc 0x3ffffffc>,
+				<0x800 0xf003f 0x10000>,
+				<0x804 0xf003f 0x10002>,
+				<0x808 0xf003f 0x10004>,
+				<0x80c 0xf003f 0x20006>,
+				<0x810 0xf003f 0x2000a>,
+				<0x814 0xf003f 0x2000e>,
+				<0x818 0xf003f 0x20012>,
+				<0x81c 0xf003f 0x20016>,
+				<0x820 0xf003f 0x2001a>,
+				<0x824 0xf003f 0x2001e>,
+				<0x828 0xf003f 0x20022>,
+				<0x82c 0xf003f 0x20026>,
+				<0x830 0xf003f 0x2002a>,
+				<0x834 0xf003f 0x2002e>,
+				<0x838 0xf003f 0x20032>,
+				<0x83c 0xf003f 0x10036>;
+};
+&acio2_nhi {
+	apple,thunderbolt-drom = [fd 02 00 00 00 00 00 00 00 90 19 c3 8c 00 5c 00 00 00 00 00 00 00 08 81 82 02 82 00 00 00 08 82 92 01 82 00 00 00 03 83 20 08 84 00 00 00 00 00 00 08 85 00 00 00 00 00 00 05 86 09 01 00 08 87 00 00 00 00 00 00 05 88 09 01 00 05 89 09 01 00 05 8a 09 01 00 0e 01 41 70 70 6c 65 2c 20 49 6e 63 2e 00 06 02 69 4f 53 00 00 00 00];
+};
+&atc2_phy {
+	apple,tunable-lane0-rx-top-cio = <0x35c 0xe00 0x200>;
+	apple,tunable-lane1-rx-top-cio = <0x35c 0xe00 0x200>;
+};
+
+&acio3_mbox { status = "okay"; };
+&acio3 {
+	status = "okay";
+	apple,tunable-pcie-adapter = <0x1008 0x6 0x6>;
+	apple,tunable-router-ap-fw = <0x8 0xff2 0x482>;
+	ports {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		port@1 {
+			reg = <1>;
+			acio3_tbt: endpoint { remote-endpoint = <&hpm3_usb4>; };
+		};
+	};
+};
+&hpm3 {
+	connector {
+		ports {
+			port@3 {
+				reg = <3>;
+				hpm3_usb4: endpoint { remote-endpoint = <&acio3_tbt>; };
+			};
+		};
+	};
+};
+&ps_atc3_cio { status = "okay"; };
+&ps_atc3_cio_pcie { status = "okay"; };
+&ps_atc3_cio_usb { status = "okay"; };
+&ps_atc3_cio_auss { status = "okay"; };
+&acio3_dart {
+	apple,tunable = <0x20c 0x80000121 0x80000121>,
+				<0x220 0xf0f 0xf0f>,
+				<0x224 0xffff 0x909>,
+				<0x300 0x1f31 0x1>,
+				<0x308 0x3ffffffc 0x10000000>,
+				<0x310 0x3ffffffc 0x3ffffffc>,
+				<0x800 0xf003f 0x10000>,
+				<0x804 0xf003f 0x10002>,
+				<0x808 0xf003f 0x10004>,
+				<0x80c 0xf003f 0x20006>,
+				<0x810 0xf003f 0x2000a>,
+				<0x814 0xf003f 0x2000e>,
+				<0x818 0xf003f 0x20012>,
+				<0x81c 0xf003f 0x20016>,
+				<0x820 0xf003f 0x2001a>,
+				<0x824 0xf003f 0x2001e>,
+				<0x828 0xf003f 0x20022>,
+				<0x82c 0xf003f 0x20026>,
+				<0x830 0xf003f 0x2002a>,
+				<0x834 0xf003f 0x2002e>,
+				<0x838 0xf003f 0x20032>,
+				<0x83c 0xf003f 0x10036>;
+};
+&acio3_nhi {
+	apple,thunderbolt-drom = [ee 03 00 00 00 00 00 00 00 b8 31 f1 99 00 5c 00 00 00 00 00 00 00 08 81 83 02 83 00 00 00 08 82 93 01 83 00 00 00 03 83 20 08 84 00 00 00 00 00 00 08 85 00 00 00 00 00 00 05 86 09 01 00 08 87 00 00 00 00 00 00 05 88 09 01 00 05 89 09 01 00 05 8a 09 01 00 0e 01 41 70 70 6c 65 2c 20 49 6e 63 2e 00 06 02 69 4f 53 00 00 00 00];
+};
+&atc3_phy {
+	apple,tunable-lane0-rx-top-cio = <0x35c 0xe00 0x200>;
+	apple,tunable-lane1-rx-top-cio = <0x35c 0xe00 0x200>;
+};
+
+&ps_auss {
+	status = "okay";
+};
+
+&pinctrl_aop {
+	status = "okay";
+	/* Only the four router LSTX pins are owned by this enablement. */
+	gpio-reserved-ranges = <0 77>, <78 1>, <80 1>, <82 1>, <84 1>;
+};
+
+&cio_reconfig0 {
+	status = "okay";
+};

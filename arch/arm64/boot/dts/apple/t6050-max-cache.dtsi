@@ -1,0 +1,112 @@
+// SPDX-License-Identifier: GPL-2.0+ OR MIT
+/* T6050 Max cache topology, ported from 56b7cf408 (J775c measurements). */
+&{/cpus}  {
+	l2_cache_m00: l2-cache-m00  {
+		compatible = "cache";
+		cache-level = <2>;
+		cache-unified;
+		cache-size = <0x800000>;
+	};
+	l2_cache_m01: l2-cache-m01  {
+		compatible = "cache";
+		cache-level = <2>;
+		cache-unified;
+		cache-size = <0x800000>;
+	};
+	l3_cache_p0: l3-cache-p0  {
+		compatible = "cache";
+		cache-level = <3>;
+		cache-unified;
+		cache-size = <0x1000000>;
+	};
+	l2_cache_p0_0: l2-cache-p0-0  {
+		compatible = "cache";
+		cache-level = <2>;
+		cache-unified;
+		next-level-cache = <&l3_cache_p0>;
+	};
+	l2_cache_p0_1: l2-cache-p0-1  {
+		compatible = "cache";
+		cache-level = <2>;
+		cache-unified;
+		next-level-cache = <&l3_cache_p0>;
+	};
+	l2_cache_p0_2: l2-cache-p0-2  {
+		compatible = "cache";
+		cache-level = <2>;
+		cache-unified;
+		next-level-cache = <&l3_cache_p0>;
+	};
+	l2_cache_p0_3: l2-cache-p0-3  {
+		compatible = "cache";
+		cache-level = <2>;
+		cache-unified;
+		next-level-cache = <&l3_cache_p0>;
+	};
+	l2_cache_p0_4: l2-cache-p0-4  {
+		compatible = "cache";
+		cache-level = <2>;
+		cache-unified;
+		next-level-cache = <&l3_cache_p0>;
+	};
+	l2_cache_p0_5: l2-cache-p0-5  {
+		compatible = "cache";
+		cache-level = <2>;
+		cache-unified;
+		next-level-cache = <&l3_cache_p0>;
+	};
+};
+&cpu0  {
+	next-level-cache = <&l2_cache_m00>;
+};
+&cpu1  {
+	next-level-cache = <&l2_cache_m00>;
+};
+&cpu2  {
+	next-level-cache = <&l2_cache_m00>;
+};
+&cpu3  {
+	next-level-cache = <&l2_cache_m00>;
+};
+&cpu4  {
+	next-level-cache = <&l2_cache_m00>;
+};
+&cpu5  {
+	next-level-cache = <&l2_cache_m00>;
+};
+&cpu6  {
+	next-level-cache = <&l2_cache_m01>;
+};
+&cpu7  {
+	next-level-cache = <&l2_cache_m01>;
+};
+&cpu8  {
+	next-level-cache = <&l2_cache_m01>;
+};
+&cpu9  {
+	next-level-cache = <&l2_cache_m01>;
+};
+&cpu10  {
+	next-level-cache = <&l2_cache_m01>;
+};
+&cpu11  {
+	next-level-cache = <&l2_cache_m01>;
+};
+&cpu12  {
+	next-level-cache = <&l2_cache_p0_0>;
+};
+&cpu13  {
+	next-level-cache = <&l2_cache_p0_1>;
+};
+&cpu14  {
+	next-level-cache = <&l2_cache_p0_2>;
+};
+&cpu15  {
+	next-level-cache = <&l2_cache_p0_3>;
+};
+&cpu16  {
+	next-level-cache = <&l2_cache_p0_4>;
+};
+&cpu17  {
+	next-level-cache = <&l2_cache_p0_5>;
+};

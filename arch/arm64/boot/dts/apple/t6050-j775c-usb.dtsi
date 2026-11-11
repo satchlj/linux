@@ -1,0 +1,361 @@
+// SPDX-License-Identifier: GPL-2.0+ OR MIT
+/* J775c rear USB ports; port 0 releases the firmware debug link. */
+/delete-node/ &acio_phy_cpu0;
+&{/soc@200000000}  {
+	atc0_phy_mbox: mailbox@2a3148000  {
+		compatible = "apple,t6050-asc-mailbox", "apple,asc-mailbox-v4";
+		reg = <0x2 0xa3148000 0x0 0x4000>;
+		interrupts = <AIC_IRQ 0 841 IRQ_TYPE_LEVEL_HIGH>,
+			<AIC_IRQ 0 842 IRQ_TYPE_LEVEL_HIGH>,
+			<AIC_IRQ 0 843 IRQ_TYPE_LEVEL_HIGH>,
+			<AIC_IRQ 0 844 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-names = "send-empty", "send-not-empty", "recv-empty", "recv-not-empty";
+		#mbox-cells = <0>;
+	};
+	atc0_phy: phy@2a3000000  {
+		compatible = "apple,t6050-combo-phy";
+		reg = <0x2 0xa3000000 0x0 0x2c000>,
+			<0x2 0xa2a90000 0x0 0x4000>,
+			<0x2 0xa2800000 0x0 0x4000>,
+			<0x2 0xa3200000 0x0 0x4000>,
+			<0x2 0xa3244000 0x0 0x4000>,
+			<0x2 0xa0000000 0x0 0x8000>,
+			<0x2 0xa0020000 0x0 0x4000>,
+			<0x2 0xa3250000 0x0 0x4000>,
+			<0x2 0xa3140000 0x0 0x4000>,
+			<0x2 0xa30c0000 0x0 0x10000>,
+			<0x2 0xa2a84000 0x0 0x4000>;
+		reg-names = "core", "usb2phy", "usb2-digital", "reset", "fabric", "axi2af", "lioa",
+			"common-cfg", "usb-control", "firmware-data", "pipehandler";
+		#phy-cells = <1>;
+		#reset-cells = <1>;
+		apple,port-index = <0>;
+		/* The DFU cable's debug link is no longer used on J775c: port 0 is ordinary. */
+		apple,guest-port-reserved;
+		mode-switch;
+		orientation-switch;
+		mboxes = <&atc0_phy_mbox>;
+		power-domains = <&ps_atc0_usb_aon>, <&ps_atc0_common>, <&ps_atc0_phymxwrap>,
+			<&ps_atc0_usb>;
+		power-domain-names = "usb-aon", "common", "wrapper", "usb";
+		port  {
+			atc0_phy_ep: endpoint  {
+				remote-endpoint = <&hpm0_ss>;
+			};
+		};
+	};
+};
+&nub_gpio0  {
+	gpio-controller;
+	#gpio-cells = <2>;
+	gpio-ranges = <&nub_gpio0 0 0 61>;
+	apple,npins = <61>;
+	interrupt-controller;
+	#interrupt-cells = <2>;
+	status = "okay";
+	gpio-reserved-ranges = <0 14>, <15 46>;
+	usb3hub-rst-hog  {
+		gpio-hog;
+		gpios = <14 GPIO_ACTIVE_LOW>;
+		output-low;
+		line-name = "usb3hub_rst";
+	};
+};
+&nub_spmi_a0  {
+	status = "okay";
+	/*
+	 * /arm-io/nub-spmi-a0/hpm0: SN201202x (ACE3), SPMI address 0xc, port-number 1 (back-right):
+	 * the DFU port. Bring-up kept it disabled for the DFU cable's host-side VDM reboot path and
+	 * the debug console (KIS); a smart plug now covers power-cycles, and full parity needs the
+	 * port. While Linux runs, this driver owns the controller, as on other Apple machines.
+	 */
+	hpm0: usb-pd@c  {
+		compatible = "apple,sn201202x";
+		reg = <0xc SPMI_USID>;
+		connector  {
+			compatible = "usb-c-connector";
+			label = "USB-C Back-right";
+			power-role = "dual";
+			data-role = "host";
+			ports  {
+				#address-cells = <1>;
+				#size-cells = <0>;
+				port@0  {
+					reg = <0>;
+					hpm0_hs: endpoint  {
+						remote-endpoint = <&usb_drd0_hs>;
+					};
+				};
+				port@1  {
+					reg = <1>;
+					hpm0_ss: endpoint  {
+						remote-endpoint = <&atc0_phy_ep>;
+					};
+				};
+			};
+		};
+	};
+	/* /arm-io/nub-spmi-a0/hpm1: SN201202x (ACE3), SPMI address 0xa, port-number 2 */
+	hpm1: usb-pd@a  {
+		compatible = "apple,sn201202x";
+		reg = <0xa SPMI_USID>;
+		connector  {
+			compatible = "usb-c-connector";
+			label = "USB-C Back-right-middle";
+			power-role = "dual";
+			data-role = "host";
+			ports  {
+				#address-cells = <1>;
+				#size-cells = <0>;
+				port@0  {
+					reg = <0>;
+					hpm1_hs: endpoint  {
+						remote-endpoint = <&usb_drd1_hs>;
+					};
+				};
+				port@1  {
+					reg = <1>;
+					hpm1_ss: endpoint  {
+						remote-endpoint = <&atc1_phy_ep>;
+					};
+				};
+			};
+		};
+	};
+	/* /arm-io/nub-spmi-a0/hpm2: SN201202x (ACE3), SPMI address 8, port-number 3 */
+	hpm2: usb-pd@8  {
+		compatible = "apple,sn201202x";
+		reg = <0x8 SPMI_USID>;
+		status = "okay";
+		connector  {
+			compatible = "usb-c-connector";
+			label = "USB-C Back-left-middle";
+			power-role = "dual";
+			data-role = "dual";
+			ports  {
+				#address-cells = <1>;
+				#size-cells = <0>;
+				port@0  {
+					reg = <0>;
+					hpm2_hs: endpoint  {
+						remote-endpoint = <&usb_drd2_hs>;
+					};
+				};
+				port@1  {
+					reg = <1>;
+					hpm2_ss: endpoint  {
+						remote-endpoint = <&atc2_phy_ep>;
+					};
+				};
+			};
+		};
+	};
+	/* /arm-io/nub-spmi-a0/hpm3: SN201202x (ACE3), SPMI address 6, port-number 4 */
+	hpm3: usb-pd@6  {
+		compatible = "apple,sn201202x";
+		reg = <0x6 SPMI_USID>;
+		connector  {
+			compatible = "usb-c-connector";
+			label = "USB-C Back-left";
+			power-role = "dual";
+			data-role = "host";
+			ports  {
+				#address-cells = <1>;
+				#size-cells = <0>;
+				port@0  {
+					reg = <0>;
+					hpm3_hs: endpoint  {
+						remote-endpoint = <&usb_drd3_hs>;
+					};
+				};
+				port@1  {
+					reg = <1>;
+					hpm3_ss: endpoint  {
+						remote-endpoint = <&atc3_phy_ep>;
+					};
+				};
+			};
+		};
+	};
+};
+&usb_drd0  {
+	compatible = "apple,t6050-dwc3", "apple,t8103-dwc3";
+	reg = <0x2 0xa2280000 0x0 0xcd00>,
+		<0x2 0xa228cd00 0x0 0x4b00>,
+		<0x2 0xa2200000 0x0 0x4000>;
+	reg-names = "dwc3-core", "dwc3-apple", "drd-cfg";
+	interrupts = <AIC_IRQ 0 1419 IRQ_TYPE_LEVEL_HIGH>;
+	dr_mode = "otg";
+	usb-role-switch;
+	role-switch-default-mode = "host";
+	iommus = <&usb0_dart 0>, <&usb0_dart1 1>;
+	power-domains = <&ps_atc0_usb>;
+	resets = <&atc0_phy 0>;
+	phys = <&atc0_phy PHY_TYPE_USB2>, <&atc0_phy PHY_TYPE_USB3>;
+	phy-names = "usb2-phy", "usb3-phy";
+	apple,tunable-gbl-default = <0x64 0x2 0x0>, <0x10 0xfff80000 0x00680000>;
+	apple,tunable-gbl-host = <0x4 0x0001ef00 0x00002f00>, <0x1c 0x00000100 0x0>,
+		<0x2c 0x000a07ff 0x000800c8>, <0x100 0x02000100 0x02000100>,
+		<0x504 0x00001000 0x0>, <0x528 0xff0000ff 0x06000006>,
+		<0x52c 0xff0000ff 0x08000008>, <0x580 0xffffffff 0x6f000006>,
+		<0x584 0xffffffff 0x00060000>;
+	apple,tunable-dbg = <0x0 0x8 0x8>;
+	apple,tunable-cfg-host = <0x20 0xff 0x1b>;
+	apple,tunable-link = <0x10 0xff000000 0xff000000>, <0x20 0x7ff00000 0x4e900000>,
+		<0x24 0x001f8000 0x000b8000>, <0x60 0x0003ffff 0x00000600>;
+	apple,tunable-cio = <0x20 0x00ff0000 0x001e0000>;
+	port  {
+		usb_drd0_hs: endpoint  {
+			remote-endpoint = <&hpm0_hs>;
+		};
+	};
+};
+&usb_drd0  {
+	status = "okay";
+};
+&atc1_phy  {
+	status = "okay";
+	port  {
+		atc1_phy_ep: endpoint  {
+			remote-endpoint = <&hpm1_ss>;
+		};
+	};
+};
+&usb_drd1  {
+	status = "okay";
+	port  {
+		usb_drd1_hs: endpoint  {
+			remote-endpoint = <&hpm1_hs>;
+		};
+	};
+};
+&atc1_phy_mbox  {
+	status = "okay";
+};
+&usb_drd1_dart_0  {
+	status = "okay";
+};
+&usb_drd1_dart_1  {
+	status = "okay";
+};
+&atc2_phy  {
+	status = "okay";
+	port  {
+		atc2_phy_ep: endpoint  {
+			remote-endpoint = <&hpm2_ss>;
+		};
+	};
+};
+&usb_drd2  {
+	status = "okay";
+	port  {
+		usb_drd2_hs: endpoint  {
+			remote-endpoint = <&hpm2_hs>;
+		};
+	};
+};
+&atc2_phy_mbox  {
+	status = "okay";
+};
+&usb_drd2_dart_0  {
+	status = "okay";
+};
+&usb_drd2_dart_1  {
+	status = "okay";
+};
+&atc3_phy  {
+	status = "okay";
+	port  {
+		atc3_phy_ep: endpoint  {
+			remote-endpoint = <&hpm3_ss>;
+		};
+	};
+};
+&usb_drd3  {
+	status = "okay";
+	port  {
+		usb_drd3_hs: endpoint  {
+			remote-endpoint = <&hpm3_hs>;
+		};
+	};
+};
+&atc3_phy_mbox  {
+	status = "okay";
+};
+&usb_drd3_dart_0  {
+	status = "okay";
+};
+&usb_drd3_dart_1  {
+	status = "okay";
+};
+&ps_atc0_common  {
+	status = "okay";
+};
+&ps_atc0_usb_aon  {
+	status = "okay";
+};
+&ps_atc0_phymxwrap  {
+	status = "okay";
+};
+&ps_atc0_usb  {
+	status = "okay";
+};
+&ps_atc1_common  {
+	status = "okay";
+};
+&ps_atc1_usb_aon  {
+	status = "okay";
+};
+&ps_atc1_phymxwrap  {
+	status = "okay";
+};
+&ps_atc1_usb  {
+	status = "okay";
+};
+&ps_atc2_common  {
+	status = "okay";
+};
+&ps_atc2_usb_aon  {
+	status = "okay";
+};
+&ps_atc2_phymxwrap  {
+	status = "okay";
+};
+&ps_atc2_usb  {
+	status = "okay";
+};
+&ps_atc3_common  {
+	status = "okay";
+};
+&ps_atc3_usb_aon  {
+	status = "okay";
+};
+&ps_atc3_phymxwrap  {
+	status = "okay";
+};
+&ps_atc3_usb  {
+	status = "okay";
+};
+&usb0_dart  {
+	status = "okay";
+};
+&usb0_dart1  {
+	status = "okay";
+};
+/  {
+	aliases  {
+		atcphy0 = &atc0_phy;
+		atcphy1 = &atc1_phy;
+		atcphy2 = &atc2_phy;
+		atcphy3 = &atc3_phy;
+	};
+};
+
+/* ATC0 USB/PHY wrapper suppliers, disabled in the shared inventory. */
+&ps_fab0_piogw {
+	status = "okay";
+};
+
+&ps_fab3_soc {
+	status = "okay";
+};
