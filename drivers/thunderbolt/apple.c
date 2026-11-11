@@ -89,6 +89,7 @@
 #include <linux/mutex.h>
 #include <linux/string.h>
 #include <linux/suspend.h>
+#include "apple-recovery.h"
 #include <linux/soc/apple/pmgr-pwrstate.h>
 #include <linux/of.h>
 #include <linux/of_address.h>
@@ -275,7 +276,6 @@ static const struct apple_cio_hw apple_cio_t6040_hw = {
  * within about 0.5 s and restarts the port anyway.
  */
 #define APPLE_CIO_LINK_LOST_MS 3000
-#define APPLE_CIO_LINK_LOST_CYCLES 3
 
 static bool resume_recovery;
 module_param(resume_recovery, bool, 0644);
@@ -2357,7 +2357,8 @@ static void apple_nhi_link_lost(struct tb_nhi *nhi)
 	u64 activity = atomic64_read(&anhi->tb->remote_activity);
 
 	/* A peer was found since the last cycle: that cycle worked */
-	if (activity != READ_ONCE(acio->link_lost_cycle_activity))
+	if (apple_cio_recovery_progress(activity,
+					 READ_ONCE(acio->link_lost_cycle_activity)))
 		WRITE_ONCE(acio->link_lost_cycles, 0);
 	WRITE_ONCE(acio->link_lost_gen, READ_ONCE(acio->start_gen));
 	mod_delayed_work(system_freezable_wq, &acio->link_lost_work,
@@ -3343,6 +3344,13 @@ static int apple_cio_start(struct apple_cio *acio)
 	dev_dbg(acio->dev, "USB4 restore: NHI ready\n");
 	acio->current_cable_info = acio->target_cable_info;
 	acio->start_gen++;
+	/* A new NHI may never report a peer: keep the one existing watch alive. */
+	if (acio->hw == &apple_cio_t6050_hw &&
+	    acio->link_lost_cycles < APPLE_CIO_LINK_LOST_CYCLES) {
+		WRITE_ONCE(acio->link_lost_gen, acio->start_gen);
+		mod_delayed_work(system_freezable_wq, &acio->link_lost_work,
+				 msecs_to_jiffies(APPLE_CIO_LINK_LOST_MS));
+	}
 	return 0;
 
 err_depopulate:
@@ -3476,13 +3484,14 @@ static void apple_cio_link_lost_work(struct work_struct *work)
 	struct apple_cio *acio = container_of(to_delayed_work(work),
 					      struct apple_cio, link_lost_work);
 	u64 activity = 0;
-	bool notify = false;
+	bool notify = false, escalate = false;
 
 	scoped_guard(mutex, &acio->lock) {
 		if (acio->removing || !acio->current_cable_info ||
 		    !acio->target_cable_info ||
 		    acio->sleep_phase != APPLE_CIO_SLEEP_OPEN ||
-		    acio->resume_recovery_failed ||
+		    acio->resume_recovery_failed || apple_cio_recovering(acio) ||
+		    acio->sleep_restart_owed ||
 		    acio->start_gen != READ_ONCE(acio->link_lost_gen))
 			return;
 		if (apple_cio_has_peer(acio, &activity))
@@ -3493,6 +3502,8 @@ static void apple_cio_link_lost_work(struct work_struct *work)
 				 acio->link_lost_cycles);
 			return;
 		}
+		escalate = apple_cio_recovery_action(acio->link_lost_cycles, false,
+						 false, acio->hw == &apple_cio_t6050_hw) == 2;
 		acio->link_lost_cycles++;
 		WRITE_ONCE(acio->link_lost_cycle_activity, activity);
 		acio->link_lost_restart = true;
@@ -3503,8 +3514,12 @@ static void apple_cio_link_lost_work(struct work_struct *work)
 	}
 
 	/* CD321x may tear down the NHI: never notify under either driver lock. */
-	if (notify)
-		typec_thunderbolt_switch_notify(acio->tbt_switch);
+	if (notify) {
+		if (escalate)
+			typec_thunderbolt_switch_notify_escalate(acio->tbt_switch);
+		else
+			typec_thunderbolt_switch_notify(acio->tbt_switch);
+	}
 }
 
 static void apple_cio_resume_link_work(struct work_struct *work)
@@ -3609,6 +3624,16 @@ static int apple_cio_tbt_switch_set(struct typec_thunderbolt_switch_dev *sw,
 		return data->state == TYPEC_THUNDERBOLT_SWITCH_OFF ? 0 : -ESHUTDOWN;
 
 	dev_dbg(acio->dev, "set cable state: %d\n", data->state);
+
+	if (data->state == TYPEC_THUNDERBOLT_SWITCH_CHECK_RECOVERY) {
+		u64 activity = 0;
+
+		if (acio->removing || acio->sleep_phase != APPLE_CIO_SLEEP_OPEN ||
+		    apple_cio_recovering(acio) || acio->sleep_restart_owed ||
+		    !acio->current_cable_info || !acio->target_cable_info)
+			return -EAGAIN;
+		return apple_cio_has_peer(acio, &activity) ? 0 : -ENOLINK;
+	}
 
 	switch (data->state) {
 	case TYPEC_THUNDERBOLT_SWITCH_OFF:
