@@ -25,7 +25,7 @@ static bool property = true, chip = true;
 static unsigned long jiffies;
 static int commands, reads, unlocks, disconnects, relocks;
 static int fail_relocks, nak_reads, busy_reads, bad_results, irq_yields;
-static bool never_idle, unlocked, idle_seen=true;
+static bool never_idle, unlocked, idle_seen=true, recovering, slow_unlock;
 static struct tps6598x *active;
 static void mutex_unlock(int *p) { assert(!unlocked); unlocked=true; }
 static void mutex_lock(int *p) { assert(unlocked); unlocked=false; }
@@ -57,6 +57,8 @@ static int tps6598x_exec_cmd_tmo(struct tps6598x *t, const char *c,
  if (!strcmp(c,"LOCK") && in[0]) {
   assert(commands == 1 && il == 4);
   assert(!memcmp(in, !strcmp(board,"apple,j716c") ? "617J" : "577J",4));
+  assert(timeout==(recovering ? 5000:1000));
+  if(slow_unlock) {if(timeout<2000)return -ETIMEDOUT;jiffies+=2000;}
   unlocks++; if (out) *out=0;
  } else if (!strcmp(c,"DISC")) {
   assert(commands==2 && il==1 && in[0]==5 && timeout==5000);
@@ -79,7 +81,7 @@ main = r'''
 int main(void) {
  struct tps6598x t={0};
  unsigned int cases=0;
- board="apple,j775c";
+ board="apple,j775c"; recovering=true;
  u32 st=3;
  commands=reads=unlocks=disconnects=relocks=irq_yields=0;
  fail_relocks=1;nak_reads=2;busy_reads=2;idle_seen=true;
@@ -95,12 +97,17 @@ int main(void) {
  assert(cd321x_reset_inherited_connection(&t,&st,true)==0);
  assert(disconnects==1 && relocks==2 && !t.disc_recovery_active && !unlocked);
  puts("PASS 3 recovery transport/busy/result cases (single DISC, bounded, IRQ service)");
+ commands=reads=unlocks=disconnects=relocks=irq_yields=0;idle_seen=true;jiffies=0;slow_unlock=true;
+ assert(cd321x_reset_inherited_connection(&t,&st,true)==0);
+ assert(unlocks==1 && disconnects==1 && relocks==1 && jiffies==7100);
+ slow_unlock=false;
+ puts("PASS delayed-unlock recovery budget case");
  const char *boards[]={"apple,j716c","apple,j775c","apple,unknown"};
  for (unsigned int b=0;b<3;b++) for (int recovery=0;recovery<2;recovery++)
  for (int prop=0;prop<2;prop++) for (int dbma=0;dbma<2;dbma++)
  for (int connected=0;connected<2;connected++) for (int host=0;host<2;host++) {
   u32 status=connected | (host<<1);
-  board=boards[b]; property=prop; t.dbma_at_probe=dbma;
+  recovering=recovery; board=boards[b]; property=prop; t.dbma_at_probe=dbma;
   commands=reads=unlocks=disconnects=relocks=0; jiffies=0;
   assert(cd321x_reset_inherited_connection(&t,&status,recovery)==0);
   bool expected=b<2 && (!recovery || b==1) && (recovery || prop) && !dbma && connected && (recovery || host);

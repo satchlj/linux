@@ -1576,7 +1576,11 @@ static int cd321x_reset_inherited_connection(struct tps6598x *tps, u32 *status,
 		return 0;
 
 	/* All suppliers are available, but no USB or router session has started. */
-	ret = tps6598x_exec_cmd(tps, "LOCK", 4, key, sizeof(result), &result);
+	/* Recovery keeps candidate44's unlock completion budget; probe is unchanged. */
+	ret = tps6598x_exec_cmd_tmo(tps, "LOCK", 4, key, sizeof(result), &result,
+				  recovery ? 5000 : 1000, 0);
+	if (recovery)
+		dev_dbg(tps->dev, "PD recovery unlock: rc=%d\n", ret);
 	if (ret)
 		return ret;
 	if (result) {
