@@ -2437,11 +2437,11 @@
 	 * The GPU aperture, die 0 (ADT sgx reg 0x2100000000 through arm-io's ranges): SGX, both
 	 * firmware ASCs and the GPU's PMGR block. All disabled; Aura's dt_set_gpu_t6050 enables them.
 	 */
-	soc@2300000000 {
+	soc {
 		compatible = "simple-bus";
 		#address-cells = <2>;
 		#size-cells = <2>;
-		ranges = <0x23 0x0 0x23 0x0 0x0 0x4000000>;
+		ranges;
 		nonposted-mmio;
 
 		/* ADT pmgr reg 51; GPX and AFR are critical there (always-on), GFX's parents are both. */
@@ -2559,12 +2559,11 @@
 	 * gates AVD_SYS_V and AVD_SOC_DART have no PS register; both hang off AVD_SYS (PMGR block
 	 * 0x2380600000 + 0x1d8, also the ARST reset), whose parent FAB1_SOC (+0x1b0) is critical.
 	 */
-	soc@2308000000 {
+	soc {
 		compatible = "simple-bus";
 		#address-cells = <2>;
 		#size-cells = <2>;
-		ranges = <0x23 0x08000000 0x23 0x08000000 0x0 0x1404000>,
-			 <0x23 0x80600000 0x23 0x80600000 0x0 0xc000>;
+		ranges;
 		nonposted-mmio;
 
 		pmgr4: power-management@2380600000 {
