@@ -520,6 +520,7 @@ void tb_domain_remove(struct tb *tb)
 	 * so whatever the service drivers send while unbinding fails at once.
 	 */
 	tb_domain_unregister_unplugged_xdomains(tb);
+	tb_dbg(tb, "USB4 teardown: XDomains unregistered\n");
 
 	if (tb->cm_ops->deinit)
 		tb->cm_ops->deinit(tb);

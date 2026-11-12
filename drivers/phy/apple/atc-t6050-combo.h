@@ -92,12 +92,20 @@ static int combo_quiesce(void *ctx)
 		ret = APPLE_T6050_USB_RUN(&dp->usb_platform, apple_t6050_usb3_shutdown);
 		if (!ret)
 			dp->usb_prepared = false;
-	} else if (dp->cio_prepared) {
+	} else if (dp->cio_prepared || dp->cio_started) {
 		ret = APPLE_T6050_USB_RUN(&dp->usb_platform, apple_t6050_cio_shutdown);
-		if (!ret)
+		if (!ret) {
 			dp->cio_prepared = false;
+			dp->cio_started = false;
+			/* Erik's cold-restart boundary follows complete part B,
+			 * not the router readiness poll. Enforce only the unelapsed
+			 * portion on a subsequent CIO start, never on first attach. */
+			dp->cio_restart_after = jiffies + msecs_to_jiffies(50);
+			dp->cio_restart_pending = true;
+			dev_dbg(dp->dev, "USB4 teardown: PHY part B complete\n");
+		}
 	} else if (dp->enabled) {
-		/* Multifunction has a distinct native shutdown; never run the
+		/* Multifunction mode has its own shutdown sequence; never run the
 		 * USB-only analog sequence over live DisplayPort lane state. */
 		ret = atc_stop(dp);
 	}
@@ -120,17 +128,19 @@ static int combo_stop(struct t6050_dp *dp)
 	int ret;
 
 	lockdep_assert_held(&dp->lock);
-	if (dp->faulted)
-		return -EIO;
-	/* No tunnel clock outlives USB4 mode. */
-	atc_dp_tunnels_stop(dp);
 	if (dp->controller_active || dp->pipe_active)
 		return -EBUSY;
+	/* Only a completed recovery teardown may clear a CIO fault. */
+	if (dp->faulted && dp->pending_mode != COMBO_CIO && !dp->cio_started)
+		return -EIO;
+	atc_dp_tunnels_stop(dp);
 	ret = combo_quiesce(dp);
-	if (!ret && dp->usb2_active) {
+	if (!ret && (dp->usb2_active || dp->usb2_started)) {
 		ret = apple_t6050_usb2_stop(&dp->usb_platform);
-		if (!ret)
+		if (!ret) {
 			dp->usb2_active = false;
+			dp->usb2_started = false;
+		}
 	}
 	if (!ret && dp->ndomains > 3)
 		ret = atc_domain_set(&dp->domain[3], false);
@@ -143,8 +153,26 @@ static int combo_stop(struct t6050_dp *dp)
 		dp->faulted = true;
 		return ret < 0 ? ret : -EIO;
 	}
+	if (dp->faulted) {
+		ret = apple_pmgr_verify_off(dp->domain[2].dev);
+		if (ret)
+			return ret;
+	}
 	dp->combo_mode = COMBO_SAFE;
+	dp->pending_mode = COMBO_SAFE;
+	dp->faulted = false;
 	return 0;
+}
+
+static void combo_cio_wait_cold(struct t6050_dp *dp, enum combo_mode mode)
+{
+	unsigned long now = jiffies;
+
+	if (mode != COMBO_CIO || !dp->cio_restart_pending)
+		return;
+	if (time_before(now, dp->cio_restart_after))
+		msleep(jiffies_to_msecs(dp->cio_restart_after - now) + 1);
+	dp->cio_restart_pending = false;
 }
 
 static int combo_start(struct t6050_dp *dp, enum combo_mode mode)
@@ -156,6 +184,8 @@ static int combo_start(struct t6050_dp *dp, enum combo_mode mode)
 		return -EIO;
 	if (dp->orientation == TYPEC_ORIENTATION_NONE)
 		return -ENOLINK;
+	combo_cio_wait_cold(dp, mode);
+	dp->pending_mode = mode;
 	ret = atc_domain_set(&dp->domain[0], true);
 	if (!ret)
 		ret = atc_domain_set(&dp->domain[1], true);
@@ -165,8 +195,10 @@ static int combo_start(struct t6050_dp *dp, enum combo_mode mode)
 	 */
 	if (!ret && dp->ndomains > 3)
 		ret = atc_domain_set(&dp->domain[3], true);
-	if (!ret)
+	if (!ret) {
+		dp->usb2_started = true;
 		ret = APPLE_T6050_USB_RUN(&dp->usb_platform, apple_t6050_usb2_host);
+	}
 	if (!ret)
 		dp->usb2_active = true;
 	if (!ret && mode == COMBO_USB) {
@@ -178,6 +210,7 @@ static int combo_start(struct t6050_dp *dp, enum combo_mode mode)
 	} else if (!ret && mode == COMBO_CIO) {
 		ktime_t start = ktime_get();
 
+		dp->cio_started = true;
 		/* USB2 stays native beside a USB4/TBT link; USB3 comes tunnelled. */
 		ret = dp->reverse ?
 			APPLE_T6050_USB_RUN(&dp->usb_platform, apple_t6050_cio_init_reverse) :
@@ -198,6 +231,12 @@ static int combo_start(struct t6050_dp *dp, enum combo_mode mode)
 		/* A partial shared transition has no cold-start ownership proof. */
 		dev_err(dp->dev, "start of mode %d failed (%d)\n", mode, ret);
 		dp->faulted = true;
+		if (mode == COMBO_CIO && !dp->controller_active && !dp->pipe_active) {
+			int cleanup = combo_stop(dp);
+
+			if (cleanup)
+				dev_err(dp->dev, "CIO partial-start cleanup deferred: %d\n", cleanup);
+		}
 		return ret < 0 ? ret : -EIO;
 	}
 	dp->combo_mode = mode;
@@ -209,7 +248,7 @@ static int combo_orientation(struct t6050_dp *dp, enum typec_orientation orienta
 	int ret;
 
 	guard(mutex)(&dp->lock);
-	if (dp->faulted)
+	if (dp->faulted && orientation != TYPEC_ORIENTATION_NONE)
 		return -EIO;
 	if (orientation != TYPEC_ORIENTATION_NONE && orientation != TYPEC_ORIENTATION_NORMAL &&
 	    orientation != TYPEC_ORIENTATION_REVERSE)

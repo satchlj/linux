@@ -958,6 +958,19 @@ void typec_thunderbolt_switch_notify(struct typec_thunderbolt_switch_dev *sw)
 EXPORT_SYMBOL_GPL(typec_thunderbolt_switch_notify);
 
 /**
+ * typec_thunderbolt_switch_notify_escalate - Ask PD to recover a failed restart
+ * @sw: Registered provider switch
+ *
+ * Consumer revalidates the current session before disconnecting it.
+ */
+void typec_thunderbolt_switch_notify_escalate(struct typec_thunderbolt_switch_dev *sw)
+{
+	atomic_notifier_call_chain(&sw->notifiers,
+				   TYPEC_THUNDERBOLT_SWITCH_ESCALATE, NULL);
+}
+EXPORT_SYMBOL_GPL(typec_thunderbolt_switch_notify_escalate);
+
+/**
  * typec_thunderbolt_switch_notify_ready - Report completed activation
  * @sw: Registered provider switch
  *

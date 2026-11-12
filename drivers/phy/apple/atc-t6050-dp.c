@@ -5,6 +5,7 @@
 #include <linux/io.h>
 #include <linux/iopoll.h>
 #include <linux/module.h>
+#include <linux/soc/apple/pmgr-pwrstate.h>
 #include <linux/mutex.h>
 #include <linux/of.h>
 #include <linux/phy/phy.h>
@@ -90,7 +91,8 @@ enum combo_mode { COMBO_SAFE, COMBO_USB, COMBO_DP4, COMBO_DP2, COMBO_CIO };
 struct t6050_dp {
 	bool combo, usb_prepared, usb2_active, pipe_active, controller_active, cio_prepared;
 	bool pipe_tunnel;	/* the active PIPE is a USB4 router's USB3 tunnel */
-	enum combo_mode combo_mode;
+	enum combo_mode combo_mode, pending_mode;
+	bool cio_started, usb2_started, cio_restart_pending;
 	enum typec_orientation orientation;
 	struct phy *combo_phy[3];
 	struct reset_controller_dev reset;
@@ -113,7 +115,8 @@ struct t6050_dp {
 	bool typec, reverse, multifunction;
 	struct apple_rtkit *rtkit;
 	void __iomem *fw_data;
-	bool fw_running;
+	bool fw_running, fw_cpu_started, fw_reinit_pending;
+	unsigned long cio_restart_after;
 	void *fw_data_saved;	/* the firmware data SRAM as the first start found it */
 	/* USB4 DP tunnel pixel clocks: source words, gates, running link rates */
 	void __iomem *dp_clk_src;
@@ -200,19 +203,26 @@ static const struct apple_rtkit_ops atc_fw_ops = {
 
 static int atc_firmware(struct t6050_dp *dp, bool start)
 {
-	int ret;
+	bool idle_restart = of_machine_is_compatible("apple,j775c");
+	u32 status;
+	int ret = 0;
 
 	if (!dp->rtkit)
 		return -ENODEV;
-	if (dp->fw_running == start)
+	if (dp->fw_reinit_pending && !dp->fw_cpu_started) {
+		ret = apple_rtkit_reinit(dp->rtkit);
+		if (ret)
+			return ret;
+		dp->fw_reinit_pending = false;
+	}
+	if (start && dp->fw_running)
+		return 0;
+	if (!start && !dp->fw_cpu_started)
 		return 0;
 	if (start) {
-		/*
-		 * The firmware is the boot loader's, preloaded with its data segment, and keeps
-		 * its state there: restarted on the state its last run left, it never finishes
-		 * calibrating the lanes (UC_TNBL_DONE). Give every start the data segment the
-		 * first one found. The PHY's domains are on here, so the SRAM is accessible.
-		 */
+		/* RTKit mutates __DATA, including UC_TNBL_DONE state. Never reuse
+		 * a prior boot's heap on a cold PHY firmware restart. Access only
+		 * after the wrapper is powered by the calling recipe. */
 		if (!dp->fw_data_saved) {
 			dp->fw_data_saved = devm_kmalloc(dp->dev, 0x10000, GFP_KERNEL);
 			if (!dp->fw_data_saved)
@@ -220,24 +230,44 @@ static int atc_firmware(struct t6050_dp *dp, bool start)
 			memcpy_fromio(dp->fw_data_saved, dp->fw_data, 0x10000);
 		} else {
 			memcpy_toio(dp->fw_data, dp->fw_data_saved, 0x10000);
+			readl(dp->fw_data + 0x10000 - sizeof(u32));
 		}
-		/* Native coprocessor run, after its +0x40 firmware enable. */
 		writel(BIT(4), dp->banks[38] + 0x28);
+		/* Ownership begins with RUN, not with a successful mailbox boot. */
+		dp->fw_cpu_started = true;
 		ret = apple_rtkit_wake(dp->rtkit);
 		if (!ret)
 			ret = apple_rtkit_start_ep(dp->rtkit, 0x20);
+		if (!ret)
+			dp->fw_running = true;
 	} else {
-		/* CIO80PhyMBI::sendPowerDown, then the RTBuddy power transition. */
+		/* Keep integration's shutdown protocol unless the board opts in. */
 		ret = apple_rtkit_send_message(dp->rtkit, 0x20, BIT_ULL(56), NULL, false);
-		if (!ret)
+		if (!ret && idle_restart) {
+			ret = apple_rtkit_idle(dp->rtkit);
+			if (!ret)
+				ret = readl_poll_timeout(dp->banks[38] + 0x44, status,
+						 status & BIT(1), 1000, 10000);
+			/* An unmeasured idle deadline must not reject shutdown. */
+			if (ret)
+				ret = apple_rtkit_shutdown(dp->rtkit);
+		} else if (!ret) {
 			ret = apple_rtkit_shutdown(dp->rtkit);
-		if (!ret)
+		}
+		if (!ret) {
 			writel((u32)~BIT(4), dp->banks[38] + 0x28);
+			dp->fw_cpu_started = false;
+			dp->fw_running = false;
+			if (idle_restart) {
+				dp->fw_reinit_pending = true;
+				ret = apple_rtkit_reinit(dp->rtkit);
+				if (!ret)
+					dp->fw_reinit_pending = false;
+			}
+		}
 	}
 	if (ret)
 		dev_err(dp->dev, "PHY firmware %s failed: %d\n", start ? "start" : "stop", ret);
-	else
-		dp->fw_running = start;
 	return ret;
 }
 

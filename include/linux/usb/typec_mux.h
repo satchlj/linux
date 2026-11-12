@@ -207,9 +207,12 @@ struct typec_thunderbolt_switch_dev;
 #define TYPEC_THUNDERBOLT_SWITCH_RESTORE 3
 /* Sent to typec_thunderbolt_switch_watch() notifiers: a switch registered. */
 #define TYPEC_THUNDERBOLT_SWITCH_ADDED 4
+/* Revalidate a failed restart before a PD-owned disconnect. */
+#define TYPEC_THUNDERBOLT_SWITCH_ESCALATE 5
 
 enum typec_thunderbolt_switch_state {
 	TYPEC_THUNDERBOLT_SWITCH_OFF,
+	TYPEC_THUNDERBOLT_SWITCH_CHECK_RECOVERY,
 	TYPEC_THUNDERBOLT_SWITCH_TBT,
 	TYPEC_THUNDERBOLT_SWITCH_USB4,
 };
@@ -261,6 +264,7 @@ int typec_thunderbolt_switch_register_notifier(struct typec_thunderbolt_switch *
 void typec_thunderbolt_switch_unregister_notifier(struct typec_thunderbolt_switch *sw,
 						  struct notifier_block *nb);
 void typec_thunderbolt_switch_notify(struct typec_thunderbolt_switch_dev *sw);
+void typec_thunderbolt_switch_notify_escalate(struct typec_thunderbolt_switch_dev *sw);
 void typec_thunderbolt_switch_notify_ready(struct typec_thunderbolt_switch_dev *sw);
 void typec_thunderbolt_switch_notify_restore(struct typec_thunderbolt_switch_dev *sw);
 int typec_thunderbolt_switch_watch(struct notifier_block *nb);
@@ -324,6 +328,11 @@ typec_thunderbolt_switch_unregister_notifier(struct typec_thunderbolt_switch *sw
 
 static inline void
 typec_thunderbolt_switch_notify(struct typec_thunderbolt_switch_dev *sw)
+{
+}
+
+static inline void
+typec_thunderbolt_switch_notify_escalate(struct typec_thunderbolt_switch_dev *sw)
 {
 }
 
