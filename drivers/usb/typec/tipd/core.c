@@ -1671,6 +1671,8 @@ static void cd321x_resume_work(struct work_struct *work)
 	fault = atomic_xchg(&cd321x->link_event, 0) || escalate;
 	ready = atomic_xchg(&cd321x->ready_event, 0);
 	restore = atomic_xchg(&cd321x->restore_event, 0);
+	cd321x_pm_restore_epoch(&cd321x->pm, restore,
+				cd321x_disc_recovery_enabled());
 	notes = cd321x_pm_notifications(&cd321x->pm, fault, ready, restore);
 	if (notes & CD321X_PM_FAULT_ACCEPTED)
 		dev_dbg(tps->dev, "revalidating cable after tunnel state change\n");

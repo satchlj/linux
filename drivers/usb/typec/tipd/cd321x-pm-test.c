@@ -1086,7 +1086,38 @@ static void cd321x_probe_mux_held_test(struct kunit *test)
 	KUNIT_EXPECT_FALSE(test, cd321x_pm_can_update(&pm));
 }
 
+static void cd321x_restore_epoch_optin_test(struct kunit *test)
+{
+	struct cd321x_pm_state pm;
+	unsigned int phase, enabled, restore, i;
+
+	for (phase = CD321X_PM_RUNNING; phase <= CD321X_PM_INITIALIZING; phase++) {
+		for (enabled = 0; enabled < 2; enabled++) {
+			for (restore = 0; restore < 2; restore++) {
+				bool allowed = enabled && restore &&
+					phase != CD321X_PM_INITIALIZING &&
+					phase != CD321X_PM_PREPARED &&
+					phase != CD321X_PM_REMOVED;
+
+				pm = (struct cd321x_pm_state){ .phase = phase };
+				KUNIT_EXPECT_EQ(test,
+					cd321x_pm_restore_epoch(&pm, restore, enabled), allowed);
+				KUNIT_EXPECT_EQ(test, pm.link_events_left,
+					allowed ? CD321X_LINK_EVENTS : 0U);
+			}
+		}
+	}
+	pm = (struct cd321x_pm_state){ .phase = CD321X_PM_RUNNING };
+	KUNIT_ASSERT_TRUE(test, cd321x_pm_restore_epoch(&pm, true, true));
+	for (i = 0; i < CD321X_LINK_EVENTS; i++)
+		KUNIT_ASSERT_TRUE(test, cd321x_pm_link_event(&pm));
+	KUNIT_EXPECT_FALSE(test, cd321x_pm_link_event(&pm));
+	KUNIT_EXPECT_FALSE(test, cd321x_pm_restore_epoch(&pm, false, true));
+	KUNIT_EXPECT_FALSE(test, cd321x_pm_link_event(&pm));
+}
+
 static struct kunit_case cd321x_pm_cases[] = {
+	KUNIT_CASE(cd321x_restore_epoch_optin_test),
 	KUNIT_CASE(cd321x_probe_mux_held_test),
 	KUNIT_CASE(cd321x_reset_first_irq_before_ready_test),
 	KUNIT_CASE(cd321x_reset_first_irq_during_prepare_test),
