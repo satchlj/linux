@@ -1612,6 +1612,7 @@ relock:
 			break;
 		msleep(100);
 	} while (time_before(jiffies, timeout));
+	dev_dbg(tps->dev, "PD recovery stages: DISC/APP=%d relock=%d\n", ret, lock_ret);
 	if (ret || lock_ret)
 		return ret ?: lock_ret;
 	if (!tps6598x_read_status(tps, status))

@@ -2364,7 +2364,8 @@ static void apple_nhi_link_lost(struct tb_nhi *nhi)
 		WRITE_ONCE(acio->link_lost_cycles, 0);
 	WRITE_ONCE(acio->link_lost_gen, READ_ONCE(acio->start_gen));
 	mod_delayed_work(system_freezable_wq, &acio->link_lost_work,
-			 msecs_to_jiffies(APPLE_CIO_LINK_LOST_MS));
+			 msecs_to_jiffies(of_machine_is_compatible("apple,j775c") ?
+				     20000 : APPLE_CIO_LINK_LOST_MS));
 }
 
 static const struct tb_nhi_ops apple_nhi_ops = {
@@ -3375,7 +3376,8 @@ static int apple_cio_start(struct apple_cio *acio)
 	    acio->link_lost_cycles < APPLE_CIO_LINK_LOST_CYCLES) {
 		WRITE_ONCE(acio->link_lost_gen, acio->start_gen);
 		mod_delayed_work(system_freezable_wq, &acio->link_lost_work,
-				 msecs_to_jiffies(APPLE_CIO_LINK_LOST_MS));
+				 msecs_to_jiffies(of_machine_is_compatible("apple,j775c") ?
+				     20000 : APPLE_CIO_LINK_LOST_MS));
 	}
 	return 0;
 
