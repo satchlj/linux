@@ -9,7 +9,7 @@
 		nonposted-mmio;
 
 		gpu: gpu@2302600000 {
-			compatible = "apple,agx-g17c", "apple,agx-g17s";
+			compatible = "apple,agx-g17c", "apple,agx-g17s", "apple,agx-t6050";
 			reg = <0x23 0x02600000 0x0 0x88000>,
 			      <0x23 0x00000000 0x0 0x4000000>;
 			reg-names = "asc", "sgx";
