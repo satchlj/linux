@@ -19,4 +19,10 @@ static inline bool apple_cio_recovery_progress(unsigned long long activity,
 {
 	return activity && activity != previous;
 }
+/* Only a live, discovered peer completes the old NHI's recovery epoch. */
+static inline bool apple_cio_recovery_completed(bool peer,
+					      unsigned long long activity)
+{
+	return peer && activity;
+}
 #endif

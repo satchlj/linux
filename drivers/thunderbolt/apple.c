@@ -3014,6 +3014,8 @@ static void apple_cio_cpu_halt(struct apple_cio *acio)
  * dropping the power-domain links. The Type-C PHY must remain configured
  * until this function returns. The caller must hold @acio->lock.
  */
+static bool apple_cio_has_peer(struct apple_cio *acio, u64 *activity);
+
 static int apple_cio_power_off(struct apple_cio *acio)
 {
 	int i, ret, error = 0;
@@ -3061,6 +3063,7 @@ static int apple_cio_power_off(struct apple_cio *acio)
 
 static void apple_cio_stop(struct apple_cio *acio)
 {
+	u64 activity = 0;
 	int ret;
 
 	lockdep_assert_held(&acio->lock);
@@ -3068,6 +3071,21 @@ static void apple_cio_stop(struct apple_cio *acio)
 		if (acio->reset_pending)
 			apple_cio_power_off(acio);
 		return;
+	}
+	/*
+	 * The PD provider can remove a working NHI without a link-lost callback.
+	 * Observe its peer before depopulation destroys that evidence. A new
+	 * NHI's zero activity must never refill a failed recovery epoch.
+	 */
+	if (of_machine_is_compatible("apple,j775c")) {
+		bool peer = apple_cio_has_peer(acio, &activity);
+
+		if (apple_cio_recovery_completed(peer, activity)) {
+			dev_dbg(acio->dev, "USB4 recovery: completed epoch (%u cycles)\n",
+				acio->link_lost_cycles);
+			WRITE_ONCE(acio->link_lost_cycles, 0);
+			WRITE_ONCE(acio->link_lost_cycle_activity, 0);
+		}
 	}
 	apple_cio_remove_children(acio);
 	dev_dbg(acio->dev, "USB4 teardown: children removed\n");

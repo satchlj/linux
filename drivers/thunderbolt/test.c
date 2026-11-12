@@ -13,6 +13,7 @@
 #include <linux/suspend.h>
 
 #include "tb.h"
+#include "apple-recovery.h"
 #include "tunnel.h"
 
 static int __ida_init(struct kunit_resource *res, void *context)
@@ -4316,7 +4317,18 @@ static void tb_test_dp_shared_rate_debounce_deferred(struct kunit *test)
 	tb_test_dp_shared_rate_arrival(test, false, true);
 }
 
+static void tb_test_recovery_epoch(struct kunit *test)
+{
+	KUNIT_EXPECT_FALSE(test, apple_cio_recovery_completed(false, 0));
+	KUNIT_EXPECT_FALSE(test, apple_cio_recovery_completed(true, 0));
+	KUNIT_EXPECT_FALSE(test, apple_cio_recovery_completed(false, 1));
+	KUNIT_EXPECT_TRUE(test, apple_cio_recovery_completed(true, 1));
+	KUNIT_EXPECT_EQ(test, apple_cio_recovery_action(3, false, false, true), 0U);
+	KUNIT_EXPECT_EQ(test, apple_cio_recovery_action(0, false, false, true), 1U);
+}
+
 static struct kunit_case tb_test_cases[] = {
+	KUNIT_CASE(tb_test_recovery_epoch),
 	KUNIT_CASE(tb_test_apple_right_dpin_wiring),
 	KUNIT_CASE(tb_test_dp_reduce_bandwidth_shared),
 	KUNIT_CASE(tb_test_dp_shared_rate_single),
