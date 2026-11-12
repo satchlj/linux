@@ -1114,3 +1114,5 @@
 /delete-node/ &{/cpus/l2-cache-p1-5};
 
 #include "t6050-j775c-incremental-usbpolicy.dtsi"
+
+#include "t6050-j775c-incremental-spmi.dtsi"
