@@ -1088,3 +1088,5 @@
 
 &acio3_mbox { status = "okay"; };
 &acio3 { status = "okay"; port { acio3_tbt: endpoint { remote-endpoint = <&hpm3_usb4>; }; }; };
+
+#include "t6050-j775c-incremental-pmgr.dtsi"
