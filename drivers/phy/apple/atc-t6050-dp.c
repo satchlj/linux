@@ -868,6 +868,8 @@ static int t6050_typec_register(struct t6050_dp *dp)
 	struct typec_mux_desc mux_desc = {
 		.fwnode = dev_fwnode(dp->dev), .drvdata = dp,
 		.set = t6050_typec_mode,
+		/* J775c's live USB controller must release PIPE before SAFE. */
+		.safe_after_role = dp->combo && of_machine_is_compatible("apple,j775c"),
 	};
 	struct typec_switch_dev *sw;
 	struct typec_mux_dev *mux;
