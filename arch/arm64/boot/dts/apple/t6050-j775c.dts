@@ -1097,3 +1097,5 @@
 
 /* J775c has no internal panel: retain the booted desktop handoff selection. */
 /delete-node/ &{/soc/dcp@48ae00000};
+
+#include "t6050-j775c-incremental-audio.dtsi"
