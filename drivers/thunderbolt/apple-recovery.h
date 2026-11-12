@@ -11,7 +11,7 @@ static inline unsigned int apple_cio_recovery_action(unsigned int cycles,
 {
 	if (blocked || peer || cycles >= APPLE_CIO_LINK_LOST_CYCLES)
 		return 0;
-	return t6050 ? 2 : 1;
+	return t6050 && cycles ? 2 : 1;
 }
 /* A new NHI starts at zero; its allocation is not remote progress. */
 static inline bool apple_cio_recovery_progress(unsigned long long activity,

@@ -1071,7 +1071,7 @@ static void cd321x_update_work(struct work_struct *work)
 	int ret;
 
 	guard(mutex)(&tps->lock);
-	if (!cd321x_pm_can_update(&cd321x->pm))
+	if (tps->disc_recovery_active || !cd321x_pm_can_update(&cd321x->pm))
 		return;
 
 	st = cd321x->update_status;
@@ -1451,6 +1451,10 @@ static int cd321x_connect(struct tps6598x *tps, u32 status)
 {
 	struct cd321x *cd321x = container_of(tps, struct cd321x, tps);
 
+	/* IRQs may acknowledge/reinitialize PD, but must not restore topology. */
+	if (tps->disc_recovery_active)
+		return 0;
+
 	/* Keep every local role and data path down until the connector is dry. */
 	if (tps->contaminant_ops &&
 	    tps->contaminant != TYPEC_CONTAMINANT_NONE)
@@ -1587,8 +1591,14 @@ static int cd321x_reset_inherited_connection(struct tps6598x *tps, u32 *status,
 	 */
 	ret = tps6598x_exec_cmd_tmo(tps, "DISC", sizeof(delay), &delay, 0, NULL,
 				  5000, 0);
-	if (!ret) {
+	if (!ret || recovery) {
+		if (recovery) {
+			tps->disc_recovery_active = true;
+			mutex_unlock(&tps->lock);
+		}
 		msleep(5100);
+		if (recovery)
+			mutex_lock(&tps->lock);
 		timeout = jiffies + msecs_to_jiffies(2000);
 		do {
 			mode = tps6598x_check_mode(tps);
@@ -1601,18 +1611,32 @@ static int cd321x_reset_inherited_connection(struct tps6598x *tps, u32 *status,
 	}
 relock:
 	/* Probe retains its original command budget and ordering. */
+	if (recovery)
+		tps->disc_recovery_active = true;
 	timeout = jiffies + msecs_to_jiffies(15000);
 	do {
 		lock_ret = tps6598x_exec_cmd_tmo(tps, "LOCK", sizeof(locked), locked,
-					       0, NULL, recovery ? 10000 : 5000, 0);
+					       recovery ? sizeof(result) : 0,
+					       recovery ? &result : NULL,
+					       recovery ? 10000 : 5000, 0);
+		if (recovery && !lock_ret && result)
+			lock_ret = -EIO;
 		if (!recovery || !lock_ret || time_after_eq(jiffies, timeout))
 			break;
-		/* A timed-out task may still own CMD1: never overwrite it. */
-		if (tps6598x_read32(tps, TPS_REG_CMD1, &cmd) || cmd)
-			break;
-		msleep(100);
+		/* A NAK/busy mailbox is not permission to overwrite CMD1. */
+		do {
+			mutex_unlock(&tps->lock);
+			msleep(100);
+			mutex_lock(&tps->lock);
+			if (time_after_eq(jiffies, timeout))
+				goto relock_done;
+		} while (tps6598x_read32(tps, TPS_REG_CMD1, &cmd) || cmd);
 	} while (time_before(jiffies, timeout));
-	dev_dbg(tps->dev, "PD recovery stages: DISC/APP=%d relock=%d\n", ret, lock_ret);
+relock_done:
+	if (recovery)
+		tps->disc_recovery_active = false;
+	dev_dbg(tps->dev, "PD recovery stages: DISC/APP=%d relock=%d result=%u\n",
+		ret, lock_ret, result);
 	if (ret || lock_ret)
 		return ret ?: lock_ret;
 	if (!tps6598x_read_status(tps, status))
@@ -1700,6 +1724,10 @@ static void cd321x_resume_work(struct work_struct *work)
 			if (ret)
 				goto retry;
 			ret = cd321x_reset_inherited_connection(tps, &status, true);
+			/* Prepare/removal can run while IRQ service owns the mutex. */
+			if (cd321x->pm.phase == CD321X_PM_PREPARED ||
+			    cd321x->pm.phase == CD321X_PM_REMOVED)
+				return;
 			if (ret) {
 				dev_err(tps->dev, "PD disconnect recovery failed: %d\n", ret);
 				goto retry;
