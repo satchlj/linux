@@ -35,6 +35,7 @@ static int commands, reads, unlocks, disconnects, relocks;
 static int tps6598x_read32(struct tps6598x *t, int reg, u32 *v) { *v=0; return 0; }
 #define time_before(a,b) ((long)((a)-(b))<0)
 #define dev_info(...) ((void)0)
+#define dev_dbg(...) ((void)0)
 static void msleep(int n) { jiffies += n; }
 static bool of_machine_is_compatible(const char *s) { return !strcmp(s, board); }
 static bool device_property_read_bool(void *d, const char *p) { return property; }
@@ -82,7 +83,7 @@ int main(void) {
  for (unsigned int c=0;c<10;c++) for (int blocked=0;blocked<2;blocked++)
  for (int peer=0;peer<2;peer++) for (int t6050=0;t6050<2;t6050++) {
   unsigned int a=apple_cio_recovery_action(c,blocked,peer,t6050);
-  assert(a==((blocked || peer || c>=3) ? 0 : (t6050 && c ? 2:1)));
+  assert(a==((blocked || peer || c>=3) ? 0 : (t6050 ? 2:1)));
   cases++;
  }
  for (unsigned int a=0;a<4;a++) for (unsigned int p=0;p<4;p++) {
@@ -120,7 +121,7 @@ static void late_peer_cases(void) {
  struct check_data d = {TYPEC_THUNDERBOLT_SWITCH_CHECK_RECOVERY};
  for (unsigned int n=0;n<3;n++) {
   a.peer=false;
-  assert(apple_cio_recovery_action(n,false,false,true)==(n ? 2:1));
+  assert(apple_cio_recovery_action(n,false,false,true)==2);
   assert(check_peer(&a,&d)==-ENOLINK);
   /* PD work was queued; the peer arrives before the final live check. */
   a.peer=true;
