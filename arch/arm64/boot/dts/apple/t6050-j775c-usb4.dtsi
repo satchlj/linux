@@ -265,7 +265,7 @@
 };
 
 
-&{/soc@200000000} {
+&{/soc} {
 	cio_reconfig0: cio_reset: reset-controller@280620000 {
 		compatible = "apple,t6050-cio-reset";
 		reg = <0x2 0x80620000 0x0 0x4000>;

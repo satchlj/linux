@@ -850,7 +850,7 @@
  * undriven input, which holds the hubs in reset; driven high, both hubs and the USB-A devices
  * behind them enumerate within a second (lobata, 2026-11-04), so the reset is active low.
  */
-&{/soc@200000000} {
+&{/soc} {
 };
 
 /*
@@ -899,7 +899,7 @@
  * pinctrl_aop when the engine passes the same checks as dcpext0, and appends
  * dart_dispext1 to the display subsystem.
  */
-&{/soc@200000000} {
+&{/soc} {
 
 
 
@@ -949,7 +949,7 @@
  * failure could hold the display back. A DMA controller that does not come up only fails
  * the PCM's open.
  */
-&{/soc@200000000} {
+&{/soc} {
 
 };
 
@@ -1005,7 +1005,7 @@
  * 0x445, SID 30, no l1-tt), dp-audio1 with power gate DISPEXT0_ADMA (0x44, pmgr0 0x270,
  * parent DISPEXT0_SYS).
  */
-&{/soc@200000000} {
+&{/soc} {
 
 };
 
@@ -1056,7 +1056,7 @@
 };
 
 /* The untrained port's DART must not be probed; Aura enables it after link-up. */
-&{/soc@200000000} {
+&{/soc} {
 };
 
 #include "t6050-j775c-usb4.dtsi"
