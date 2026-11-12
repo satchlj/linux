@@ -119,6 +119,19 @@ static inline bool cd321x_pm_resume(struct cd321x_pm_state *pm)
 	return true;
 }
 
+/* The router's post-sleep restore also covers an early freezer abort,
+ * which never reaches the PD device's prepare/resume callbacks.
+ */
+static inline bool cd321x_pm_restore_epoch(struct cd321x_pm_state *pm,
+					  bool restore, bool enabled)
+{
+	if (!restore || !enabled || pm->phase == CD321X_PM_INITIALIZING ||
+	    pm->phase == CD321X_PM_PREPARED || pm->phase == CD321X_PM_REMOVED)
+		return false;
+	cd321x_pm_new_connection(pm);
+	return true;
+}
+
 static inline bool cd321x_pm_link_event(struct cd321x_pm_state *pm)
 {
 	if (pm->phase == CD321X_PM_INITIALIZING ||
