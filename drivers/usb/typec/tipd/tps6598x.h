@@ -376,6 +376,8 @@ struct tps6598x {
 	 * tps6598x_disconnect() ends it after shutting down the USB role.
 	 */
 	bool remove_safe_prepared;
+	/* PD recovery owns topology while IRQs service the reconnect. */
+	bool disc_recovery_active;
 
 	struct power_supply *psy;
 	struct power_supply_desc psy_desc;

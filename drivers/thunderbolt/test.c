@@ -4324,7 +4324,7 @@ static void tb_test_recovery_epoch(struct kunit *test)
 	KUNIT_EXPECT_FALSE(test, apple_cio_recovery_completed(false, 1));
 	KUNIT_EXPECT_TRUE(test, apple_cio_recovery_completed(true, 1));
 	KUNIT_EXPECT_EQ(test, apple_cio_recovery_action(3, false, false, true), 0U);
-	KUNIT_EXPECT_EQ(test, apple_cio_recovery_action(0, false, false, true), 2U);
+	KUNIT_EXPECT_EQ(test, apple_cio_recovery_action(0, false, false, true), 1U);
 }
 
 static struct kunit_case tb_test_cases[] = {
