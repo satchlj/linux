@@ -1129,3 +1129,8 @@
 
 /* Keep isolated MTP activation failure disabled after later migrations. */
 &{/soc/iommu@294800000} { status = "disabled"; };
+
+#include "t6050-j775c-incremental-gpuopp.dtsi"
+
+/* Installed Stage2 needs the final fallback while Linux uses current G17 compatibles. */
+&gpu { compatible = "apple,agx-g17c", "apple,agx-g17s", "apple,agx-t6050"; };
